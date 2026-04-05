@@ -46,7 +46,7 @@ export async function environmentPolicyRoutes(app: FastifyInstance) {
 
   app.put(
     "/current",
-    { preHandler: requireRole(["owner", "admin"]) },
+    { preHandler: requireRole(["owner", "admin", "operator"]) },
     async (request, reply) => {
       const scope = (request as any).scopeContext as { orgId?: string; projectId?: string; envId?: string } | undefined;
       const orgId = String(scope?.orgId ?? "");

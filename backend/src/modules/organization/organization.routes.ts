@@ -93,7 +93,7 @@ export async function organizationRoutes(app: FastifyInstance) {
 
   app.post(
     "/organizations",
-    { preHandler: requireRole(["owner", "admin"]) },
+    { preHandler: requireRole(["owner", "admin", "operator"]) },
     async (request, reply) => {
       const parsed = CreateOrgSchema.safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
@@ -131,7 +131,7 @@ export async function organizationRoutes(app: FastifyInstance) {
 
   app.post(
     "/projects",
-    { preHandler: requireRole(["owner", "admin"]) },
+    { preHandler: requireRole(["owner", "admin", "operator"]) },
     async (request, reply) => {
       const parsed = CreateProjectSchema.safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
@@ -157,7 +157,7 @@ export async function organizationRoutes(app: FastifyInstance) {
 
   app.post(
     "/environments",
-    { preHandler: requireRole(["owner", "admin"]) },
+    { preHandler: requireRole(["owner", "admin", "operator"]) },
     async (request, reply) => {
       const parsed = CreateEnvironmentSchema.safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });

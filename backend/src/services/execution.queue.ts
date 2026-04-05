@@ -32,7 +32,20 @@ export async function triggerWorkflow(workflowId: string): Promise<void> {
     logger.warn("queue_disabled_execution_skipped", { workflowId });
     return;
   }
-  await q.add("execute", { workflowId });
+  await q.add(
+    "execute",
+    { workflowId },
+    {
+      jobId: `exec-${workflowId}`, // Idempotent key
+      attempts: 5,                 // Robust retries
+      backoff: {
+        type: "exponential",
+        delay: 2000,               // Exponential backoff strategy
+      },
+      removeOnComplete: true,      // Clean up fast
+      removeOnFail: false,         // Keep in Redis as a Dead-Letter trace
+    }
+  );
 }
 
 export function startExecutionWorker(handler: (job: Job<ExecuteWorkflowPayload>) => Promise<void>) {

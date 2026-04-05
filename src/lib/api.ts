@@ -182,24 +182,20 @@ api.interceptors.response.use(
       }
     }
 
-    let message =
-      error.response?.data?.error ||
-      error.response?.data?.details ||
-      error.message ||
-      "API request failed";
+    let rawMessage = error.response?.data?.error || error.response?.data?.details || error.message || "API request failed";
+    let message = typeof rawMessage === "string" ? rawMessage : (typeof rawMessage === "object" && rawMessage?.message) ? rawMessage.message : JSON.stringify(rawMessage);
+    
     if (proxyBackendDown) {
       message = BACKEND_DOWN_HINT;
     } else if (status === 401) {
-      const raw = String(
-        error.response?.data?.error ?? error.response?.data?.message ?? message ?? ""
-      ).trim();
-      const generic = !raw || /^unauthorized$/i.test(raw);
+      const rawMsgString = typeof message === "string" ? message : JSON.stringify(message);
+      const generic = !rawMsgString || /^unauthorized$/i.test(rawMsgString);
       if (generic) {
         message = import.meta.env.DEV
-          ? "Not signed in to the API (401). Sign in with Auth0, or for local dev set AUTH_DEV_BYPASS=true and NODE_ENV=development in backend/.env. If you used demo Sign in, that token is not a real JWT — use \"Clear stored token & retry\" or ensure NODE_ENV=development on the API, then restart the API."
+          ? "Not signed in to the API (401). Sign in with Auth0, or preset local overrides."
           : "Your session expired or you are not signed in. Please sign in again.";
       }
-    } else if (!error.response && message === "Network Error") {
+    } else if (!error.response && String(message) === "Network Error") {
       message = import.meta.env.DEV
         ? "Cannot reach the API (backend not running, wrong URL, or request blocked). Start the backend on port 5002 or use the Vite /api proxy."
         : "Cannot reach the API. Ensure your host proxies `/api` to the backend, or rebuild with VITE_WORKFLOWS_API_URL set to your API origin.";

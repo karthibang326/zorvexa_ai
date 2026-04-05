@@ -94,20 +94,49 @@ export const aiCopilotService = {
   },
 
   async detectAnomaly(input: { metrics: Record<string, unknown>; runId?: string; workflowId?: string }) {
-    const fallback: AnomalyResult = {
-      anomaly: true,
-      reason: "Potential anomaly detected (AI unavailable)",
-      suggestion: "Review recent changes and scale critical workers if needed.",
-    };
+    // 1. STATISTICAL DETECTION (Deterministic, FAANG-grade)
+    let isAnomaly = false;
+    let statReason = "";
+    const errorRate = Number(input.metrics.errorRate ?? 0);
+    const cpuUsage = Number(input.metrics.cpuUsage ?? 0);
+    const p95Latency = Number(input.metrics.p95Latency ?? input.metrics.latency ?? 0);
 
-    let result: AnomalyResult = fallback;
-    try {
-      const text = await callLLM(anomalyPrompt(input.metrics), { timeoutMs: 8_000 });
-      const parsed = safeJsonParse<AnomalyResult>(text);
-      if (parsed.ok && typeof parsed.value.anomaly === "boolean") result = parsed.value;
-    } catch {
-      // fallback
+    if (errorRate > 0.05) {
+      isAnomaly = true;
+      statReason = `Error rate (${(errorRate * 100).toFixed(1)}%) exceeds 5% threshold.`;
+    } else if (cpuUsage > 85) {
+      isAnomaly = true;
+      statReason = `CPU usage (${cpuUsage}%) exceeds 85% threshold.`;
+    } else if (p95Latency > 1000) {
+      isAnomaly = true;
+      statReason = `P95 Latency (${p95Latency}ms) exceeds 1000ms SLA.`;
     }
+
+    if (!isAnomaly) {
+      return { anomaly: false, reason: "Metrics within normal statistical bounds.", suggestion: "No action required." };
+    }
+
+    // 2. LLM EXPLANATION ONLY (Separating Decision from Execution)
+    let suggestion = "Take preventative action: scale deployments or investigate metrics.";
+    let llmExplanation = statReason;
+    
+    try {
+      const explanationPrompt = `An anomaly was deterministically detected by the policy engine: ${statReason}. Given the metrics ${JSON.stringify(input.metrics)}, provide a 1-sentence operational suggestion and a 1-sentence explanation. Return exactly JSON: { "suggestion": "...", "explanation": "..." }`;
+      const text = await callLLM(explanationPrompt, { timeoutMs: 8_000 });
+      const parsed = safeJsonParse<{ suggestion: string; explanation: string }>(text);
+      if (parsed.ok && parsed.value.suggestion && parsed.value.explanation) {
+        suggestion = parsed.value.suggestion;
+        llmExplanation = parsed.value.explanation;
+      }
+    } catch {
+      // Graceful fallback during LLM hallucinations or timeouts
+    }
+
+    const result: AnomalyResult = {
+      anomaly: true,
+      reason: llmExplanation,
+      suggestion,
+    };
 
     if (usePrismaPersistence()) {
       try {
@@ -116,7 +145,14 @@ export const aiCopilotService = {
             runId: input.runId,
             workflowId: input.workflowId,
             type: "ANOMALY",
-            result: result as any,
+            result: {
+              ...result,
+              auditLog: {
+                inputMetrics: input.metrics,
+                llmExplanation,
+                policyDecision: isAnomaly ? "DETECTED_ANOMALY" : "STABLE",
+              }
+            } as any,
           },
         });
       } catch {
