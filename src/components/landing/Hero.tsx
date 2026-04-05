@@ -63,8 +63,8 @@ export default function Hero() {
             size="lg"
             className="h-12 rounded-xl bg-gradient-to-r from-[#2563eb] to-[#4f46e5] px-8 text-base font-medium text-white shadow-[0_14px_40px_rgba(37,99,235,0.35)] transition-transform hover:scale-[1.02] hover:brightness-110"
           >
-            <Link to="/dashboard?demo=1" className="inline-flex items-center justify-center gap-2">
-              Try Demo (No Setup)
+            <Link to="/auth" className="inline-flex items-center justify-center gap-2">
+              Get Started
               <ArrowRight className="h-4 w-4 opacity-90" />
             </Link>
           </Button>

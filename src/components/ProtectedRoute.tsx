@@ -9,18 +9,7 @@ interface ProtectedRouteProps {
 
 export default function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
   const { user, loading, hasRole, mfaGate } = useAuth();
-  const devBypassEnabled = (() => {
-    if (!import.meta.env.DEV) return false;
-    try {
-      return window.localStorage.getItem("astraops_e2e_bypass_auth") === "1";
-    } catch {
-      return false;
-    }
-  })();
-
-  if (devBypassEnabled) {
-    return <>{children}</>;
-  }
+  // Removed the local storage Dev Auth Bypass for secure auth constraints.
 
   if (loading) {
     return (

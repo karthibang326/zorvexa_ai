@@ -18,61 +18,7 @@ function SupabaseNotConfigured() {
         <p className="text-muted-foreground text-sm mb-4 leading-relaxed text-left">
           This app uses <strong>Supabase</strong> for accounts and MFA. Add the variables below to a{" "}
           <code className="text-xs bg-muted px-1 py-0.5 rounded">.env</code> or{" "}
-          <code className="text-xs bg-muted px-1 py-0.5 rounded">.env.local</code> file in{" "}
-          <strong>either</strong> the app folder (next to <code className="text-xs bg-muted px-1 rounded">vite.config.ts</code>){" "}
-          <strong>or</strong> the <strong>parent</strong> folder (next to the outer <code className="text-xs bg-muted px-1 rounded">package.json</code> if
-          your repo is nested) — Vite merges both.
-        </p>
-        <ul className="text-left text-sm text-muted-foreground space-y-2 mb-4 font-mono text-xs">
-          <li>VITE_SUPABASE_URL=https://….supabase.co</li>
-          <li>VITE_SUPABASE_PUBLISHABLE_KEY=eyJ… (anon public key from Supabase)</li>
-        </ul>
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-left text-xs text-amber-100/95 mb-4">
-          <strong className="text-amber-200">If you already edited .env:</strong> lines must{" "}
-          <strong>not</strong> start with <code className="text-amber-100">#</code> (that comments them out — Vite ignores them). Save the file,
-          then <strong>stop and restart</strong> the dev server (<code className="text-amber-100">npm run dev</code> or{" "}
-          <code className="text-amber-100">npm run dev:free</code>).
-        </div>
-        {import.meta.env.DEV && (
-          <div className="text-left text-xs text-muted-foreground mb-4 space-y-1">
-            <p>
-              Dev check — what Vite loaded:{" "}
-              <span className={presence.url ? "text-emerald-400" : "text-destructive"}>
-                URL {presence.url ? "ok" : "missing"}
-              </span>
-              {" · "}
-              <span className={presence.key ? "text-emerald-400" : "text-destructive"}>
-                key {presence.key ? "ok" : "missing"}
-              </span>
-            </p>
-            {(presence.urlEmptyAfterEquals || presence.keyEmptyAfterEquals) && (
-              <p className="text-amber-200/90">
-                Your <code className="text-amber-100">.env</code> has{" "}
-                <code className="text-amber-100">VITE_SUPABASE_*=</code> with <strong>nothing after the =</strong>. Paste the
-                full URL and anon key on the same line, save, then restart the dev server.
-              </p>
-            )}
-            {!presence.urlEmptyAfterEquals && !presence.keyEmptyAfterEquals && !presence.url && !presence.key && (
-              <p>
-                If you never added these keys, add two lines to <code className="text-muted-300">.env</code>. You can also use{" "}
-                <code className="text-muted-300">.env.local</code> (same folder, gitignored) — Vite loads it automatically.
-              </p>
-            )}
-          </div>
-        )}
-        <p className="text-xs text-muted-foreground text-left mb-4">
-          Copy values from{" "}
-          <a
-            href="https://supabase.com/dashboard/project/_/settings/api"
-            target="_blank"
-            rel="noreferrer"
-            className="text-primary underline"
-          >
-            Supabase → Project Settings → API
-          </a>
-          . See <code className="bg-muted px-1 rounded">.env.example</code>. Set{" "}
-          <code className="bg-muted px-1 rounded">SUPABASE_URL</code> in <code className="bg-muted px-1 rounded">backend/.env</code> to the
-          same project for API/billing.
+          <code className="text-xs bg-muted px-1 py-0.5 rounded">.env.local</code> file.
         </p>
         <Link to="/" className="inline-block text-sm text-primary hover:underline">
           ← Back to home
@@ -88,6 +34,7 @@ export default function Auth() {
   const [searchParams] = useSearchParams();
   const [isLogin, setIsLogin] = useState(() => searchParams.get("signup") !== "1");
   const [isForgot, setIsForgot] = useState(false);
+  const [isMagicLink, setIsMagicLink] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -102,10 +49,7 @@ export default function Auth() {
     return <SupabaseNotConfigured />;
   }
   if (loading) return null;
-  if (user || import.meta.env.DEV) {
-    if (import.meta.env.DEV) {
-      window.localStorage.setItem("astraops_e2e_bypass_auth", "1");
-    }
+  if (user) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -120,6 +64,15 @@ export default function Auth() {
         if (error) throw error;
         toast.success("Password reset email sent. Check your inbox.");
         setIsForgot(false);
+      } else if (isMagicLink) {
+        const { error } = await supabase.auth.signInWithOtp({
+          email,
+          options: {
+            emailRedirectTo: `${window.location.origin}/dashboard`
+          }
+        });
+        if (error) throw error;
+        toast.success("Secure magic link sent to your email!");
       } else if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -168,18 +121,40 @@ export default function Auth() {
 
         <div className="rounded-xl border border-border bg-card p-8">
           <h1 className="text-2xl font-bold text-foreground mb-1">
-            {isForgot ? "Reset password" : isLogin ? "Welcome back" : "Create account"}
+            {isForgot ? "Reset password" : isMagicLink ? "Sign in instantly" : isLogin ? "Welcome back" : "Create account"}
           </h1>
           <p className="text-muted-foreground text-sm mb-6">
             {isForgot
               ? "Enter your email to receive a reset link"
-              : isLogin
-                ? `Sign in to your ${BRAND.name} workspace`
-                : `Get started with ${BRAND.name}`}
+              : isMagicLink
+                ? "Enter your email to receive a secure login link"
+                : isLogin
+                  ? `Sign in to your ${BRAND.name} workspace`
+                  : `Get started with ${BRAND.name}`}
           </p>
 
+          {!isForgot && !isMagicLink && isLogin && (
+            <div className="mb-6 space-y-4">
+              <button
+                type="button"
+                onClick={() => setIsMagicLink(true)}
+                className="w-full flex items-center justify-center gap-3 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground hover:bg-secondary/80 transition-colors"
+              >
+                Sign in with a Magic Link
+              </button>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground tracking-wider">Or enter your password</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && !isForgot && (
+            {!isLogin && !isForgot && !isMagicLink && (
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1.5">Display name</label>
                 <input
@@ -205,7 +180,7 @@ export default function Auth() {
               />
             </div>
 
-            {!isForgot && (
+            {!isForgot && !isMagicLink && (
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1.5">Password</label>
                 <div className="relative">
@@ -229,7 +204,7 @@ export default function Auth() {
               </div>
             )}
 
-            {isLogin && !isForgot && (
+            {isLogin && !isForgot && !isMagicLink && (
               <button
                 type="button"
                 onClick={() => setIsForgot(true)}
@@ -248,15 +223,17 @@ export default function Auth() {
                 ? "Loading..."
                 : isForgot
                   ? "Send reset link"
-                  : isLogin
-                    ? "Sign in"
-                    : "Create account"}
+                  : isMagicLink
+                    ? "Send Magic Link"
+                    : isLogin
+                      ? "Sign in"
+                      : "Create account"}
             </button>
           </form>
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
-            {isForgot ? (
-              <button type="button" onClick={() => setIsForgot(false)} className="text-primary hover:underline">
+            {isForgot || isMagicLink ? (
+              <button type="button" onClick={() => { setIsForgot(false); setIsMagicLink(false); }} className="text-primary hover:underline">
                 Back to sign in
               </button>
             ) : isLogin ? (

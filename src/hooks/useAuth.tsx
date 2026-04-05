@@ -75,7 +75,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
+    supabase.auth.getUser().then(async ({ data: { user: u }, error: userError }) => {
+      if (userError || !u) {
+        setSession(null);
+        setUser(null);
+        setApiAuthToken(null);
+        setMfaGate({ kind: "ok" });
+        setRoles([]);
+        setLoading(false);
+        
+        // Strict cleanup
+        localStorage.removeItem("astraops_e2e_bypass_auth");
+        await supabase.auth.signOut().catch(() => {});
+        localStorage.clear();
+        return;
+      }
+
+      // If user is validated against the server, retrieve full session payload
+      const { data: { session: s } } = await supabase.auth.getSession();
+
       setSession(s);
       setUser(s?.user ?? null);
       setApiAuthToken(s?.access_token ?? null);
