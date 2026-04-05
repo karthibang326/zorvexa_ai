@@ -24,6 +24,13 @@ export async function resolveMfaGate(session: Session | null): Promise<MfaGateSt
 
   const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
   if (factorsError) {
+    if (import.meta.env.DEV) {
+      console.warn("[mfa] listFactors failed — enable MFA in Supabase (Auth → Providers → MFA):", factorsError.message);
+    }
+    // Do not silently skip MFA when the product expects TOTP (user would never see Google Authenticator).
+    if (requireEnrollment) {
+      return { kind: "enroll" };
+    }
     return { kind: "ok" };
   }
 
@@ -36,11 +43,24 @@ export async function resolveMfaGate(session: Session | null): Promise<MfaGateSt
   }
 
   const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-  if (aalError || !aal || !factorId) {
+  if (aalError) {
+    if (import.meta.env.DEV) {
+      console.warn("[mfa] getAuthenticatorAssuranceLevel failed:", aalError.message);
+    }
+    return factorId ? { kind: "verify", factorId } : { kind: "ok" };
+  }
+
+  if (!factorId) {
     return { kind: "ok" };
   }
 
-  if (aal.currentLevel === "aal1" && aal.nextLevel === "aal2") {
+  if (!aal) {
+    return { kind: "verify", factorId };
+  }
+
+  // Any AAL1 session with a verified TOTP factor still needs a challenge (Google Authenticator code).
+  // Relying only on nextLevel === "aal2" missed some Supabase/client combinations.
+  if (aal.currentLevel === "aal1") {
     return { kind: "verify", factorId };
   }
 

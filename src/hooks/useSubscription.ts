@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
 export type SubscriptionPlan = "starter" | "pro" | "enterprise";
@@ -20,6 +20,12 @@ export const useSubscription = () => {
 
   useEffect(() => {
     if (!user) {
+      setSubscription(null);
+      setLoading(false);
+      return;
+    }
+
+    if (!isSupabaseConfigured) {
       setSubscription(null);
       setLoading(false);
       return;

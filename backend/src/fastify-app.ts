@@ -1,6 +1,5 @@
 import Fastify from "fastify";
 import rateLimit from "@fastify/rate-limit";
-import jwt from "@fastify/jwt";
 import workflowRoutes from "./routes/workflows.fastify";
 import { bootstrapWorkflowWorker } from "./workers/workflow.worker";
 
@@ -11,10 +10,6 @@ async function bootstrap() {
     max: Number(process.env.RATE_LIMIT_MAX ?? 100),
     timeWindow: process.env.RATE_LIMIT_WINDOW ?? "1 minute",
   });
-
-  if (process.env.JWT_SECRET) {
-    await app.register(jwt, { secret: process.env.JWT_SECRET });
-  }
 
   app.addHook("onRequest", async (req) => {
     req.log.info({ url: req.url, method: req.method }, "incoming_request");

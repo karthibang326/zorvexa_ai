@@ -7,7 +7,7 @@ export const BRAND = {
 } as const;
 
 /** Public hostname only (no scheme). */
-export const BRAND_PRIMARY_DOMAIN = "zorvexa-ai.com" as const;
+export const BRAND_PRIMARY_DOMAIN = "zoravexa-ai.com" as const;
 
 /** Default production CORS entries (apex + www). */
 export const BRAND_PRODUCTION_ORIGINS = [

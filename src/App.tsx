@@ -11,8 +11,6 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import AuthMfaSetup from "./pages/AuthMfaSetup";
 import AuthMfaVerify from "./pages/AuthMfaVerify";
-import LoginPage from "./pages/auth/login";
-import SignupPage from "./pages/auth/signup";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import Docs from "./pages/Docs";
@@ -56,8 +54,8 @@ const App = () => (
               <Route path="/auth" element={<Auth />} />
               <Route path="/auth/mfa-setup" element={<AuthMfaSetup />} />
               <Route path="/auth/mfa-verify" element={<AuthMfaVerify />} />
-              <Route path="/auth/login" element={<LoginPage />} />
-              <Route path="/auth/signup" element={<SignupPage />} />
+              <Route path="/auth/login" element={<Navigate to="/auth" replace />} />
+              <Route path="/auth/signup" element={<Navigate to="/auth?signup=1" replace />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/pricing" element={<PricingPage />} />
               <Route path="/features" element={<FeaturesPage />} />

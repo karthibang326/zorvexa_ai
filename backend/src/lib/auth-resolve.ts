@@ -83,14 +83,14 @@ export async function resolveAuthFromBearer(request: FastifyRequest): Promise<Re
       const payload = await verifySupabaseAccessToken(token);
       return { kind: "supabase", user: claimsToAuthUser(payload as Record<string, unknown>) };
     } catch {
-      /* not a valid Supabase user JWT — fall through to @fastify/jwt */
+      /* not a valid Supabase user JWT — fall through to local HS256 (jose) */
     }
   }
 
   return { kind: "hs256" };
 }
 
-/** Map payload set by @fastify/jwt after jwtVerify(). */
+/** Map payload set after local HS256 verify (`attachLocalJwtUser`). */
 export function fastifyJwtPayloadToAuthUser(payload: Record<string, unknown>): ResolvedAuthUser {
   return claimsToAuthUser(payload);
 }

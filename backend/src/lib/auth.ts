@@ -1,5 +1,6 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { env } from "../config/env";
+import { attachLocalJwtUser } from "./local-jwt";
 import { fastifyJwtPayloadToAuthUser, resolveAuthFromBearer } from "./auth-resolve";
 
 export type UserRole = "owner" | "admin" | "operator" | "viewer" | "auditor";
@@ -20,6 +21,9 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       return;
     }
     const resolved = await resolveAuthFromBearer(request);
+    if (resolved.kind === "none") {
+      return reply.code(401).send({ error: "Unauthorized" });
+    }
     if (resolved.kind === "auth0") {
       const u = resolved.user;
       if (u.jti && revokedJti.has(String(u.jti))) {
@@ -40,7 +44,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       return;
     }
 
-    await (request as any).jwtVerify();
+    await attachLocalJwtUser(request, env.JWT_SECRET);
     const payload = (request as any).user as any;
     if (env.AUTH_ISSUER && env.AUTH_PROVIDER !== "auth0" && String(payload?.iss ?? "") !== env.AUTH_ISSUER) {
       return reply.code(401).send({ error: "Invalid token issuer" });

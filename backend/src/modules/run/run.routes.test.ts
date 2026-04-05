@@ -1,12 +1,10 @@
 import Fastify from "fastify";
-import jwt from "@fastify/jwt";
 import { runRoutes } from "./run.routes";
 
 describe("run routes", () => {
   const app = Fastify();
 
   beforeAll(async () => {
-    await app.register(jwt, { secret: "test-secret" });
     await app.register(runRoutes, { prefix: "/api/runs" });
   });
 

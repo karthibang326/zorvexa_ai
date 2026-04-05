@@ -7,7 +7,7 @@ export const BRAND = {
 } as const;
 
 /** Public hostname only (no scheme). DNS / Site URL / cookie domain hints. */
-export const BRAND_PRIMARY_DOMAIN = "zorvexa-ai.com" as const;
+export const BRAND_PRIMARY_DOMAIN = "zoravexa-ai.com" as const;
 
 /**
  * HTTPS origins allowed in default backend CORS (apex + www). If you serve the app on

@@ -1,6 +1,8 @@
 import { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { env } from "../../config/env";
 import { authenticate, revokeTokenJti } from "../../lib/auth";
+import { signLocalJwt } from "../../lib/local-jwt";
 import { recordAudit } from "../audit/audit.service";
 import {
   getContextOptions,
@@ -45,7 +47,7 @@ export async function contextRoutes(app: FastifyInstance) {
     if (prevJti) revokeTokenJti(prevJti);
     const jti = `ctx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const role = valid.role;
-    const token = app.jwt.sign({
+    const token = await signLocalJwt(env.JWT_SECRET, {
       sub: userId,
       role: role === "OWNER" || role === "ADMIN" ? "admin" : role === "ENGINEER" ? "operator" : "viewer",
       orgId,

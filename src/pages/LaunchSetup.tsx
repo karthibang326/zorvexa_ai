@@ -42,7 +42,7 @@ import {
 import { setDemoModeEnabled } from "@/lib/demo-mode";
 import { ApiClientError, clearStoredApiSession } from "@/lib/api";
 import { useContextStore } from "@/store/context";
-import { useAuthStore } from "@/store/authStore";
+import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -1312,7 +1312,7 @@ const LaunchSetup = () => {
                           type="button"
                           data-testid="clear-token-retry-btn"
                           onClick={() => {
-                            useAuthStore.getState().logout();
+                            void supabase.auth.signOut();
                             clearStoredApiSession();
                             toast.message("Cleared session token; retrying connection test…");
                             void onTestConnection();

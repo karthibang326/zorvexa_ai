@@ -1,6 +1,5 @@
 import Fastify from "fastify";
 import rateLimit from "@fastify/rate-limit";
-import jwt from "@fastify/jwt";
 import { env } from "./config/env";
 import { workflowRoutes } from "./modules/workflow/workflow.routes";
 import { runRoutes } from "./modules/run/run.routes";
@@ -105,10 +104,6 @@ export function buildServer() {
     if (env.NODE_ENV === "production") {
       reply.header("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
     }
-  });
-
-  app.register(jwt, {
-    secret: env.JWT_SECRET,
   });
 
   app.addHook("onRequest", async (request) => {

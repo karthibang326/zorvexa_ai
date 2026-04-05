@@ -18,7 +18,7 @@ function getToken(): string | null {
 }
 
 /**
- * Demo `authStore` login/signup stores opaque strings `astraops_<uuid>` — not JWTs.
+ * Legacy opaque strings in localStorage (`astraops_<uuid>`) are not JWTs.
  * Sending them as Bearer breaks Auth0/JWKS or HS256 verification. In dev, omit the header so
  * `AUTH_DEV_BYPASS` can apply.
  */

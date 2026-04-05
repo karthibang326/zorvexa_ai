@@ -3,13 +3,56 @@
  * If something already serves /health on :5002, start Vite only (avoids EADDRINUSE when an old API holds the port).
  * Otherwise start API + Vite via dev:all.
  */
+import fs from "fs";
 import http from "http";
 import net from "net";
 import { spawn } from "child_process";
 import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import { dirname, join, resolve } from "path";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** Same merge as vite.config: parent `.env` then app `.env` (app wins). */
+function parseViteSupabaseFromDotenv(appRootDir) {
+  let url = "";
+  let key = "";
+  const parentDir = join(appRootDir, "..");
+  for (const rootDir of [parentDir, appRootDir]) {
+    for (const name of [".env", ".env.local", ".env.development", ".env.development.local"]) {
+      let raw = "";
+      try {
+        raw = fs.readFileSync(join(rootDir, name), "utf8");
+      } catch {
+        continue;
+      }
+      for (const line of raw.split("\n")) {
+        const t = line.trim();
+        if (!t || t.startsWith("#")) continue;
+        if (t.startsWith("VITE_SUPABASE_URL=")) {
+          url = t.slice("VITE_SUPABASE_URL=".length).trim();
+        }
+        if (t.startsWith("VITE_SUPABASE_PUBLISHABLE_KEY=")) {
+          key = t.slice("VITE_SUPABASE_PUBLISHABLE_KEY=".length).trim();
+        }
+      }
+    }
+  }
+  return { url, key };
+}
+
+function warnIfSupabaseEnvIncomplete() {
+  const { url, key } = parseViteSupabaseFromDotenv(root);
+  if (url && key) return;
+  const innerEnv = resolve(root, ".env");
+  const parentEnv = resolve(root, "..", ".env");
+  console.error(
+    "\n\x1b[33m[dev]\x1b[0m \x1b[1mSupabase\x1b[0m is not configured for the UI — \x1b[1m/auth\x1b[0m will show “sign-in required”.\n" +
+      "    Put \x1b[1mVITE_SUPABASE_URL\x1b[0m + \x1b[1mVITE_SUPABASE_PUBLISHABLE_KEY\x1b[0m in \x1b[1meither\x1b[0m file (anon key from Supabase → Settings → API):\n" +
+      `      \x1b[36m${parentEnv}\x1b[0m  (parent folder — often easier to find)\n` +
+      `      \x1b[36m${innerEnv}\x1b[0m  (next to vite.config.ts)\n` +
+      "    No empty value after \x1b[1m=\x1b[0m; then \x1b[1mrestart\x1b[0m dev (Ctrl+C, run again).\n"
+  );
+}
 
 const VITE_PORT = Number(process.env.PORT) || 5173;
 
@@ -56,6 +99,8 @@ function run(cmd, args) {
     process.exit(code ?? 0);
   });
 }
+
+warnIfSupabaseEnvIncomplete();
 
 if (!(await portIsFree(VITE_PORT))) {
   console.error(

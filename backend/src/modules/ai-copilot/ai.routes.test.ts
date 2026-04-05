@@ -1,5 +1,6 @@
 import Fastify from "fastify";
-import jwt from "@fastify/jwt";
+import { env } from "../../config/env";
+import { signLocalJwt } from "../../lib/local-jwt";
 import { aiCopilotRoutes } from "./ai.routes";
 
 jest.mock("../../lib/llm", () => ({
@@ -22,20 +23,20 @@ jest.mock("../../lib/llm", () => ({
   safeJsonParse: jest.requireActual("../../lib/llm").safeJsonParse,
 }));
 
-function sign(app: any) {
-  return app.jwt.sign({ sub: "test", role: "operator", email: "test@example.com" });
+async function authHeader() {
+  const t = await signLocalJwt(env.JWT_SECRET, { sub: "test", role: "operator", email: "test@example.com" });
+  return `Bearer ${t}`;
 }
 
 describe("ai copilot routes", () => {
   it("analyze workflow", async () => {
     const app = Fastify();
-    await app.register(jwt, { secret: "test" });
     await app.register(aiCopilotRoutes, { prefix: "/api/ai" } as any);
 
     const res = await app.inject({
       method: "POST",
       url: "/api/ai/analyze",
-      headers: { authorization: `Bearer ${sign(app)}` },
+      headers: { authorization: await authHeader() },
       payload: { nodes: [{ id: "a", type: "HTTP", label: "A" }], edges: [] },
     });
     expect(res.statusCode).toBe(200);
@@ -47,13 +48,12 @@ describe("ai copilot routes", () => {
 
   it("generate workflow", async () => {
     const app = Fastify();
-    await app.register(jwt, { secret: "test" });
     await app.register(aiCopilotRoutes, { prefix: "/api/ai" } as any);
 
     const res = await app.inject({
       method: "POST",
       url: "/api/ai/generate",
-      headers: { authorization: `Bearer ${sign(app)}` },
+      headers: { authorization: await authHeader() },
       payload: { prompt: "Auto-scale Kubernetes pods when CPU > 80%" },
     });
     expect(res.statusCode).toBe(200);
@@ -64,13 +64,12 @@ describe("ai copilot routes", () => {
 
   it("anomaly detection", async () => {
     const app = Fastify();
-    await app.register(jwt, { secret: "test" });
     await app.register(aiCopilotRoutes, { prefix: "/api/ai" } as any);
 
     const res = await app.inject({
       method: "POST",
       url: "/api/ai/anomaly",
-      headers: { authorization: `Bearer ${sign(app)}` },
+      headers: { authorization: await authHeader() },
       payload: { metrics: { cpu: 95, cost: 120 } },
     });
     expect(res.statusCode).toBe(200);

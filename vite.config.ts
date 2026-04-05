@@ -1,10 +1,30 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
+const appDir = path.resolve(__dirname);
+/** Parent of the Vite app (e.g. `Desktop/zorvexa_ai/` when app is `…/zorvexa_ai/zorvexa_ai/`). */
+const parentDir = path.resolve(__dirname, "..");
+
+/**
+ * Merge `../.env` then `./.env` so Supabase keys work whether you edit the inner or outer `.env`.
+ * Child values override parent for the same key.
+ */
+function viteEnvDefine(mode: string): Record<string, string> {
+  const merged = {
+    ...loadEnv(mode, parentDir, ""),
+    ...loadEnv(mode, appDir, ""),
+  };
+  return Object.fromEntries(
+    Object.entries(merged)
+      .filter(([key]) => key.startsWith("VITE_"))
+      .map(([key, val]) => [`import.meta.env.${key}`, JSON.stringify(val)])
+  );
+}
+
 /** Backend for dev + `vite preview` (same-origin /api in browser). Override with VITE_DEV_API_TARGET=http://host:port */
-const API_TARGET = (process.env.VITE_DEV_API_TARGET || "http://127.0.0.1:5002").replace(/\/$/, "");
+const API_TARGET = (process.env.VITE_DEV_API_TARGET || "http://127.0.0.1:5003").replace(/\/$/, "");
 
 const apiProxy = {
   "/health": { target: API_TARGET, changeOrigin: true },
@@ -22,6 +42,9 @@ const apiProxy = {
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  envDir: appDir,
+  /** Ensures `VITE_*` from parent `.env` are visible (many editors open the repo one level up). */
+  define: viteEnvDefine(mode),
   server: {
     host: "::",
     /** Default 5173 — match Auth0 Allowed Callback / Logout / Web Origins. Override with PORT=. */

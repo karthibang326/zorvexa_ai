@@ -1,7 +1,7 @@
 import { Check } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-const signupHref = "/auth/signup";
+const signupHref = "/auth?signup=1";
 
 const tiers = [
   {

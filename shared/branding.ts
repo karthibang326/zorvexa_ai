@@ -6,7 +6,7 @@ export const BRAND = {
     "Enterprise AI control plane for autonomous infrastructure, cost intelligence, and multi-cloud operations",
 } as const;
 
-export const BRAND_PRIMARY_DOMAIN = "zorvexa-ai.com" as const;
+export const BRAND_PRIMARY_DOMAIN = "zoravexa-ai.com" as const;
 
 export const BRAND_PRODUCTION_ORIGINS = [
   `https://${BRAND_PRIMARY_DOMAIN}`,

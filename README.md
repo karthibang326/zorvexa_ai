@@ -26,12 +26,21 @@ Autonomous Cloud Intelligence — enterprise AI control plane.
 
 ## Quick Start
 
+If your checkout has this app inside a nested folder (e.g. `zorvexa_ai/zorvexa_ai`), you can run **`npm install` and `npm run dev` from the parent directory** — a root `package.json` forwards commands into `zorvexa_ai/`. For Docker on a fresh machine, use **`npm run host:docker`** from that parent (creates `.env` with generated secrets, then starts Compose).
+
 ### Frontend
+
+Sign-in uses **Supabase** only.
+
+**Local (recommended):** start the local stack, then the UI (defaults are in **`.env.development`** — no need to paste keys):
 
 ```bash
 npm install
-npm run dev
+npm run supabase:start   # Docker — wait until API is ready
+npm run dev              # or: npm run dev:free
 ```
+
+**Hosted Supabase:** set **`VITE_SUPABASE_URL`** and **`VITE_SUPABASE_PUBLISHABLE_KEY`** in `.env` or `.env.local` (see `.env.example`). Hosted values override `.env.development`.
 
 ### Backend
 

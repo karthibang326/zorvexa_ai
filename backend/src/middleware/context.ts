@@ -1,5 +1,6 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { env as appEnv } from "../config/env";
+import { attachLocalJwtUser } from "../lib/local-jwt";
 import { fastifyJwtPayloadToAuthUser, resolveAuthFromBearer } from "../lib/auth-resolve";
 import { prisma } from "../lib/prisma";
 import { logError } from "../lib/logger";
@@ -98,8 +99,16 @@ export async function contextMiddleware(request: FastifyRequest, reply: FastifyR
               jti: resolved.user.jti,
             };
             (request as any).authUser = authUser;
-          } else {
-            await (request as any).jwtVerify();
+          } else if (resolved.kind === "supabase") {
+            authUser = {
+              id: resolved.user.id,
+              role: resolved.user.role,
+              email: resolved.user.email,
+              jti: resolved.user.jti,
+            };
+            (request as any).authUser = authUser;
+          } else if (resolved.kind === "hs256") {
+            await attachLocalJwtUser(request, appEnv.JWT_SECRET);
             const payload = (request as any).user as Record<string, unknown>;
             const u = fastifyJwtPayloadToAuthUser(payload);
             authUser = {
@@ -109,6 +118,8 @@ export async function contextMiddleware(request: FastifyRequest, reply: FastifyR
               jti: u.jti,
             };
             (request as any).authUser = authUser;
+          } else {
+            throw new Error("Unauthorized context request");
           }
         }
       } catch {

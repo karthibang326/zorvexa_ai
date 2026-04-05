@@ -5,14 +5,21 @@ import { z } from "zod";
 import { BRAND_PRODUCTION_ORIGINS } from "../shared/branding";
 
 const rootEnvPath = path.resolve(__dirname, "../../../.env");
+const rootEnvDevelopmentPath = path.resolve(__dirname, "../../../.env.development");
 const backendEnvPath = path.resolve(__dirname, "../../.env");
 
 /**
- * Load repo root `.env` first (shared secrets), then `backend/.env`.
+ * Load committed `.env.development` first (local Supabase defaults), then root `.env`, then `backend/.env`.
  * Empty values in `backend/.env` must not wipe non-empty values from root (dotenv's default
  * "load backend first" + second file no-override caused root-only Stripe ids to be ignored).
  */
-dotenv.config({ path: rootEnvPath });
+(function loadRootEnv() {
+  const nodeEnv = process.env.NODE_ENV || "development";
+  if (nodeEnv !== "production" && nodeEnv !== "test" && fs.existsSync(rootEnvDevelopmentPath)) {
+    dotenv.config({ path: rootEnvDevelopmentPath });
+  }
+  dotenv.config({ path: rootEnvPath });
+})();
 if (fs.existsSync(backendEnvPath)) {
   const parsed = dotenv.parse(fs.readFileSync(backendEnvPath, "utf8"));
   for (const [key, raw] of Object.entries(parsed)) {
@@ -28,7 +35,7 @@ const stripeEnvString = z
 
 /**
  * Jest loads local `.env` (often `AUTH_PROVIDER=auth0` + `AUTH_ISSUER`).
- * Route tests use `app.jwt.sign` (HS256, no Auth0 `iss`); force local JWT path and skip issuer/audience checks.
+ * Route tests use `signLocalJwt(JWT_SECRET, …)` (HS256, no Auth0 `iss`); force local JWT path and skip issuer/audience checks.
  */
 if (process.env.NODE_ENV === "test") {
   process.env.AUTH_PROVIDER = "local";

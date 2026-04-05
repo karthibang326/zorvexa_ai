@@ -95,7 +95,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const hasRole = (role: AppRole) => roles.includes(role);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    if (isSupabaseConfigured) {
+      await supabase.auth.signOut();
+    }
     setRoles([]);
     setMfaGate({ kind: "ok" });
     if (isSupabaseConfigured) setApiAuthToken(null);
