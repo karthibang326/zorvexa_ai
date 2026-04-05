@@ -1,0 +1,16 @@
+services:
+  backend:
+    image: ghcr.io/your-org/astraops-backend:latest
+    pull_policy: always
+    deploy:
+      replicas: 2
+
+  worker:
+    image: ghcr.io/your-org/astraops-worker:latest
+    pull_policy: always
+    deploy:
+      replicas: 2
+
+  frontend:
+    image: ghcr.io/your-org/astraops-frontend:latest
+    pull_policy: always

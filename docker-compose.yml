@@ -1,0 +1,143 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: astraops-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: astraops
+      POSTGRES_USER: astraops
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U astraops -d astraops"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - astraops-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: astraops-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - astraops-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: astraops-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 5002
+      DATABASE_URL: postgresql://astraops:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/astraops?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set — run: openssl rand -hex 32}
+      AUTH_DEV_BYPASS: ${AUTH_DEV_BYPASS:-false}
+      PRODUCTION_STRICT: ${PRODUCTION_STRICT:-true}
+      AUTH_PROVIDER: ${AUTH_PROVIDER:-local}
+      AUTH_ISSUER: ${AUTH_ISSUER:-}
+      AUTH_AUDIENCE: ${AUTH_AUDIENCE:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5185,https://zorvexa-ai.com,https://www.zorvexa-ai.com}
+      DEV_BOOTSTRAP_ORG_DEFAULT: ${DEV_BOOTSTRAP_ORG_DEFAULT:-true}
+      TRUST_PROXY: ${TRUST_PROXY:-true}
+      RUN_MAX_ATTEMPTS: 5
+      RATE_LIMIT_MAX: 200
+      RATE_LIMIT_WINDOW: 1 minute
+    ports:
+      - "5002:5002"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5002/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    networks:
+      - astraops-net
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    container_name: astraops-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://astraops:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/astraops?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      RUN_MAX_ATTEMPTS: 5
+    networks:
+      - astraops-net
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_WORKFLOWS_API_URL: ${VITE_WORKFLOWS_API_URL:-}
+        VITE_AUTH0_DOMAIN: ${VITE_AUTH0_DOMAIN:-}
+        VITE_AUTH0_CLIENT_ID: ${VITE_AUTH0_CLIENT_ID:-}
+        VITE_AUTH0_AUDIENCE: ${VITE_AUTH0_AUDIENCE:-}
+        VITE_AUTH0_SKIP_AUDIENCE_ON_LOGIN: ${VITE_AUTH0_SKIP_AUDIENCE_ON_LOGIN:-}
+        VITE_AUTH0_REDIRECT_URI: ${VITE_AUTH0_REDIRECT_URI:-}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
+        VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:-}
+    container_name: astraops-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+    networks:
+      - astraops-net
+
+networks:
+  astraops-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:

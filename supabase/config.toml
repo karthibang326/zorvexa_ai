@@ -1,0 +1,12 @@
+project_id = "omrmyxtocriieklourzo"
+
+# Local `supabase start` only. For hosted Supabase: paste these templates in
+# Dashboard → Authentication → Email templates (see supabase_help_guide.md).
+
+[auth.email.template.confirmation]
+subject = "Confirm your Zorvexa account"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Reset your password"
+content_path = "./supabase/templates/recovery.html"

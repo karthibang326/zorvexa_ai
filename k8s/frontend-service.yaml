@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: astraops-frontend
+  namespace: astraops
+spec:
+  type: LoadBalancer
+  selector:
+    app: astraops-frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80

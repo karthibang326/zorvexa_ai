@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="88" viewBox="0 0 360 88" fill="none">
+  <rect width="360" height="88" rx="16" fill="#FFFFFF" />
+  <g transform="translate(24 20)">
+    <defs>
+      <linearGradient id="astra-v1-hl-grad" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#2563EB" />
+        <stop offset="1" stop-color="#4F46E5" />
+      </linearGradient>
+    </defs>
+    <path d="M3 11c2.5-1.2 5-1.2 7.5 0" stroke="url(#astra-v1-hl-grad)" stroke-width="1.35" stroke-linecap="round" opacity=".55" />
+    <path d="M3 16c2.5-1.2 5-1.2 7.5 0" stroke="url(#astra-v1-hl-grad)" stroke-width="1.35" stroke-linecap="round" opacity=".75" />
+    <path d="M3 21c2.5-1.2 5-1.2 7.5 0" stroke="url(#astra-v1-hl-grad)" stroke-width="1.35" stroke-linecap="round" opacity=".55" />
+    <path d="M12 26 L16 6 L20 26 M13.2 18.5h5.6" stroke="url(#astra-v1-hl-grad)" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <text x="72" y="52" fill="#0B0F1A" font-size="30" font-family="Inter, SF Pro Display, system-ui, sans-serif" letter-spacing="-0.02em">
+    <tspan font-weight="600">Astra</tspan><tspan font-weight="400">Ops</tspan>
+  </text>
+</svg>

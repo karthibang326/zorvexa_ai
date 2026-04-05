@@ -1,0 +1,19 @@
+# Production-oriented overlay: do not publish Postgres, Redis, or API ports on the host.
+# Only the UI (nginx) is reachable on the host at port 3000 — put TLS in front (Caddy/ALB) or bind to loopback.
+#
+# From repo root (requires `.env` — see deploy/production.env.example):
+#   docker compose -f docker-compose.yml -f deploy/docker-compose.production.yml up --build -d
+# Or: npm run docker:up:prod
+#
+# `!override` replaces merged port lists (see Docker Compose merge docs).
+
+services:
+  postgres:
+    ports: !override []
+  redis:
+    ports: !override []
+  backend:
+    ports: !override []
+  frontend:
+    ports: !override
+      - "3000:80"

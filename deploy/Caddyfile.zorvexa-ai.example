@@ -1,0 +1,19 @@
+# Zorvexa — TLS + reverse proxy to the Docker UI (nginx on host port 3000).
+#
+# Prereqs:
+#   1. DNS A/AAAA (or CNAME) for zorvexa-ai.com → this server’s public IP
+#   2. Stack up: npm run self-host:up   (or docker compose … see docs/SELF_HOST_ZORVEXA_AI.md)
+#   3. sudo cp deploy/Caddyfile.zorvexa-ai.example /etc/caddy/Caddyfile
+#   4. sudo systemctl reload caddy   (or caddy run)
+#
+# Caddy obtains Let’s Encrypt certs automatically when 80/443 are reachable.
+
+zorvexa-ai.com {
+	encode gzip
+	reverse_proxy 127.0.0.1:3000
+}
+
+# Redirect www → apex (optional; remove if you serve only www)
+www.zorvexa-ai.com {
+	redir https://zorvexa-ai.com{uri} permanent
+}

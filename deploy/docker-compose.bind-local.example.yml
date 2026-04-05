@@ -1,0 +1,21 @@
+# Production-hardening overlay: bind published ports to loopback only.
+# The host must terminate TLS (e.g. Caddy) and proxy to 127.0.0.1:3000.
+#
+# Usage from repo root:
+#   docker compose -f docker-compose.yml -f deploy/docker-compose.bind-local.example.yml up -d
+#
+# Rename/copy to deploy/docker-compose.bind-local.yml (gitignored locally) if you prefer.
+
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+  backend:
+    ports:
+      - "127.0.0.1:5002:5002"
+  frontend:
+    ports:
+      - "127.0.0.1:3000:80"

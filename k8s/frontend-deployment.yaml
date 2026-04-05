@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: astraops-frontend
+  namespace: astraops
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: astraops-frontend
+  template:
+    metadata:
+      labels:
+        app: astraops-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/your-org/astraops-frontend:latest
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

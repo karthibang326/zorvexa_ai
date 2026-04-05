@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: astraops-config
+  namespace: astraops
+data:
+  NODE_ENV: "production"
+  PORT: "5002"
+  RATE_LIMIT_MAX: "200"
+  RATE_LIMIT_WINDOW: "1 minute"
+  RUN_MAX_ATTEMPTS: "5"
+  CORS_ORIGINS: "https://app.zorvexa-ai.com,https://zorvexa-ai.com,https://www.zorvexa-ai.com"

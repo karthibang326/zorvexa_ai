@@ -1,0 +1,38 @@
+{
+  "family": "astraops-backend",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::<account-id>:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::<account-id>:role/astraopsBackendTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "astraops-backend",
+      "image": "<account-id>.dkr.ecr.<region>.amazonaws.com/astraops-backend:latest",
+      "essential": true,
+      "portMappings": [
+        { "containerPort": 5002, "protocol": "tcp" }
+      ],
+      "environment": [
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "PORT", "value": "5002" },
+        { "name": "AUTH_PROVIDER", "value": "auth0" }
+      ],
+      "secrets": [
+        { "name": "DATABASE_URL", "valueFrom": "arn:aws:secretsmanager:<region>:<account-id>:secret:astraops/database_url" },
+        { "name": "JWT_SECRET", "valueFrom": "arn:aws:secretsmanager:<region>:<account-id>:secret:astraops/jwt_secret" },
+        { "name": "STRIPE_SECRET_KEY", "valueFrom": "arn:aws:secretsmanager:<region>:<account-id>:secret:astraops/stripe_secret_key" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/astraops-backend",
+          "awslogs-region": "<region>",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}
+

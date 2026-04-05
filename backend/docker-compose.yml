@@ -1,0 +1,50 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: quantumops
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      NODE_ENV: development
+      PORT: 5002
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/quantumops?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev-secret-change-me
+      RUN_MAX_ATTEMPTS: 3
+    ports:
+      - "5002:5002"
+    command: sh -c "npm run prisma:generate && npx prisma db push && npm run dev"
+
+volumes:
+  pg_data:
+  redis_data:
+

@@ -1,0 +1,43 @@
+# Least-privilege RBAC for the AstraOps AI executor (kubeconfig user or in-cluster ServiceAccount).
+# Apply into the namespace that hosts target workloads, e.g.:
+#   kubectl apply -f backend/k8s/rbac/astraops-ai-executor.yaml -n default
+#
+# Required verbs:
+#   - deployments: get, list, patch (scale + rollout restart via replace)
+#   - replicasets: list (optional, for observability)
+#   - pods: get, list (health / verification)
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: astraops-ai-executor
+  labels:
+    app.kubernetes.io/name: astraops-ai-executor
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: astraops-ai-executor
+  labels:
+    app.kubernetes.io/name: astraops-ai-executor
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    verbs: ["get", "list", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: astraops-ai-executor
+  labels:
+    app.kubernetes.io/name: astraops-ai-executor
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: astraops-ai-executor
+subjects:
+  - kind: ServiceAccount
+    name: astraops-ai-executor

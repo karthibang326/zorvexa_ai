@@ -1,0 +1,456 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  role      String
+  createdAt DateTime @default(now())
+}
+
+model Organization {
+  id              String   @id @default(uuid())
+  name            String
+  slug            String?
+  ownerId         String
+  billingPlan     String   @default("enterprise")
+  monthlySpendUsd Float    @default(0)
+  aiSavingsUsd    Float    @default(0)
+  createdAt       DateTime @default(now())
+}
+
+/// Append-only audit trail — always scoped by orgId (tenant isolation).
+model AuditLog {
+  id           String   @id @default(uuid())
+  orgId        String
+  userId       String
+  action       String
+  resourceType String
+  resourceId   String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model Project {
+  id             String @id @default(uuid())
+  name           String
+  organizationId String
+}
+
+model Environment {
+  id        String @id @default(uuid())
+  name      String
+  projectId String
+}
+
+model EnvironmentPolicy {
+  id                    String   @id @default(uuid())
+  orgId                 String
+  projectId             String
+  envId                 String
+  tier                  String
+  approvalRequired      Boolean  @default(false)
+  maxActionsPerHour     Int      @default(40)
+  monthlyBudgetUsd      Float    @default(5000)
+  blastRadius           String   @default("medium")
+  sloAvailabilityTarget Float    @default(99.5)
+  autoRollback          Boolean  @default(true)
+  complianceTags        Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([orgId, projectId, envId])
+  @@index([orgId, projectId, envId])
+}
+
+model Membership {
+  id             String @id @default(uuid())
+  userId         String
+  organizationId String
+  role           String
+}
+
+model Plugin {
+  id           String   @id @default(uuid())
+  name         String
+  type         String
+  version      String
+  configSchema Json
+  entrypoint   String
+  isOfficial   Boolean  @default(false)
+  priceMonthly Float    @default(0)
+  description  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  installations InstalledPlugin[]
+
+  @@unique([name, version])
+  @@index([type, isOfficial])
+}
+
+model InstalledPlugin {
+  id          String   @id @default(uuid())
+  pluginId    String
+  orgId       String
+  projectId   String?
+  environment String?
+  config      Json
+  enabled     Boolean  @default(true)
+  installedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  plugin Plugin @relation(fields: [pluginId], references: [id], onDelete: Cascade)
+
+  @@unique([pluginId, orgId, projectId, environment])
+  @@index([orgId, enabled])
+}
+
+model Workflow {
+  id        String   @id @default(uuid())
+  name      String
+  version   Int
+  status    String
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions    WorkflowVersion[]
+  deployments Deployment[]
+  runs        Run[]
+  insights    AIInsight[]
+
+  @@index([status, createdAt])
+  @@index([createdBy, createdAt])
+}
+
+model WorkflowVersion {
+  id         String   @id @default(uuid())
+  workflowId String
+  version    Int
+  nodes      Json
+  edges      Json
+  createdAt  DateTime @default(now())
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId, version])
+}
+
+model Deployment {
+  id           String    @id @default(uuid())
+  workflowId   String
+  version      Int       @default(1)
+  versionLabel String?
+  name         String    @default("deployment")
+  service      String    @default("unknown-service")
+  environment  String    @default("env-unknown")
+  projectId    String    @default("proj-unknown")
+  orgId        String    @default("org-unknown")
+  namespace    String
+  strategy     String
+  status       String
+  logs         Json?
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  workflow         Workflow          @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  events           DeploymentLog[]
+  incidents        IncidentCase[]
+  chaosExperiments ChaosExperiment[]
+
+  @@index([orgId, projectId, environment, startedAt])
+  @@index([workflowId, createdAt])
+}
+
+model DeploymentLog {
+  id           String   @id @default(uuid())
+  deploymentId String
+  event        String
+  message      String
+  status       String?
+  level        String   @default("INFO")
+  timestamp    DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  deployment Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+
+  @@index([deploymentId, createdAt])
+  @@index([deploymentId, timestamp])
+}
+
+model ChaosExperiment {
+  id            String    @id @default(uuid())
+  deploymentId  String?
+  type          String
+  target        String
+  durationSec   Int
+  status        String
+  approvalMode  String
+  startedAt     DateTime  @default(now())
+  finishedAt    DateTime?
+  impactSummary Json?
+  createdBy     String?
+
+  deployment Deployment? @relation(fields: [deploymentId], references: [id], onDelete: SetNull)
+
+  @@index([startedAt])
+  @@index([status])
+}
+
+model IncidentCase {
+  id              String    @id @default(uuid())
+  deploymentId    String?
+  source          String
+  issue           String
+  rootCause       String?
+  action          String?
+  status          String
+  detectedAt      DateTime  @default(now())
+  resolvedAt      DateTime?
+  success         Boolean?
+  confidenceScore Float?
+  metadata        Json?
+
+  deployment Deployment? @relation(fields: [deploymentId], references: [id], onDelete: SetNull)
+
+  @@index([detectedAt])
+  @@index([status])
+}
+
+model PredictionRecord {
+  id                 String   @id @default(uuid())
+  predictedIssue     String
+  riskScore          Float
+  failureProbability Float
+  recommendation     String?
+  createdAt          DateTime @default(now())
+  metadata           Json?
+
+  @@index([createdAt])
+}
+
+model AutonomousAction {
+  id             String   @id @default(uuid())
+  type           String
+  decision       String
+  confidence     Float
+  status         String
+  manualOverride Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  metadata       Json?
+
+  @@index([createdAt])
+  @@index([status])
+}
+
+model Run {
+  id                String             @id @default(uuid())
+  workflowId        String
+  workflow          Workflow           @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflowVersion   Int
+  status            String
+  idempotencyKey    String?            @unique
+  errorMessage      String?
+  attempt           Int                @default(1)
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  stepLogs          RunStepLog[]
+  insights          AIInsight[]
+  selfHealingEvents SelfHealingEvent[]
+
+  @@index([workflowId, createdAt])
+  @@index([status, createdAt])
+}
+
+model RunStepLog {
+  id        String    @id @default(uuid())
+  runId     String
+  run       Run       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  stepId    String
+  stepName  String
+  stepType  String
+  status    String
+  message   String?
+  attempt   Int       @default(1)
+  startedAt DateTime?
+  endedAt   DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([runId, createdAt])
+}
+
+model AIInsight {
+  id         String   @id @default(uuid())
+  runId      String?
+  workflowId String?
+  type       String
+  result     Json
+  createdAt  DateTime @default(now())
+
+  run      Run?      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  workflow Workflow? @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt])
+  @@index([workflowId, createdAt])
+}
+
+model SelfHealingEvent {
+  id        String   @id @default(uuid())
+  runId     String?
+  type      String
+  status    String
+  details   Json
+  createdAt DateTime @default(now())
+
+  run Run? @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt])
+  @@index([type, createdAt])
+}
+
+model SREAction {
+  id          String   @id @default(uuid())
+  orgId       String
+  projectId   String?
+  environment String?
+  action      String
+  resource    String
+  status      String
+  result      String
+  riskScore   Float?
+  confidence  Float?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([status, createdAt])
+}
+
+model CostRecord {
+  id        String   @id @default(uuid())
+  provider  String
+  service   String
+  cost      Float
+  timestamp DateTime
+  createdAt DateTime @default(now())
+
+  @@index([provider, timestamp])
+  @@index([service, timestamp])
+}
+
+model InfraGeneration {
+  id        String   @id @default(uuid())
+  prompt    String
+  plan      Json
+  terraform String
+  k8sYaml   String
+  helmChart String
+  status    String
+  deployed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([status, createdAt])
+  @@index([deployed, createdAt])
+}
+
+/// Real-time AI stream events (WebSocket + optional Postgres persistence)
+model AiStreamEvent {
+  id            String   @id @default(uuid())
+  phase         String
+  title         String
+  detail        String   @default("")
+  correlationId String
+  payload       Json?
+  createdAt     DateTime @default(now())
+
+  @@index([phase, createdAt])
+  @@index([correlationId, createdAt])
+}
+
+/// End-to-end AI decision loop (detect → decide → act → verify) for learning & audit
+model AiDecisionRun {
+  id               String   @id @default(uuid())
+  correlationId    String   @unique
+  orgId            String   @default("org-1")
+  projectId        String   @default("proj-1")
+  envId            String   @default("env-prod")
+  resource         String
+  detection        Json
+  decision         Json?
+  execution        Json?
+  verification     Json?
+  outcome          String
+  improvementScore Float?
+  createdAt        DateTime @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([resource, createdAt])
+}
+
+/// Self-learning: outcomes after each detect→act cycle for confidence tuning and safety
+model AiLearning {
+  id               String   @id @default(uuid())
+  correlationId    String
+  orgId            String   @default("org-1")
+  resource         String
+  action           String
+  provider         String
+  executionSuccess Boolean
+  outcomeImproved  Boolean
+  outcome          String
+  metricsBefore    Json
+  metricsAfter     Json
+  improvementScore Float?
+  latencyBefore    Float?
+  latencyAfter     Float?
+  costSignal       Float?
+  patternFlags     Json?
+  /// Full detection payload (anomaly signals, summary)
+  detection        Json?
+  /// Full decision payload (action, confidence, risk, provider, …)
+  decision         Json?
+  /// Execution result (simulation / K8s / cloud)
+  execution        Json?
+  createdAt        DateTime @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([resource, action, createdAt])
+  @@index([correlationId])
+  @@map("ai_learning")
+}
+
+/// Closed-loop learning: state → action → reward → next_state (per org / project / env)
+model AgentExperience {
+  id               String   @id @default(uuid())
+  orgId            String
+  projectId        String?
+  environment      String?
+  agentType        String
+  state            Json
+  action           String
+  nextState        Json?
+  reward           Float?
+  result           String?
+  rewardComponents Json?
+  metadata         Json?
+  status           String   @default("PENDING")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([orgId, createdAt])
+  @@index([orgId, agentType, createdAt])
+  @@index([status, createdAt])
+}

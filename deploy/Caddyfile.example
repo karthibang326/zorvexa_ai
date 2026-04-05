@@ -1,0 +1,15 @@
+# Example: terminate TLS on the host and proxy to Zorvexa UI (Docker maps host 3000 → container 80).
+# 1. Install Caddy: https://caddyserver.com/docs/install
+# 2. Replace app.example.com with your real FQDN (e.g. zorvexa-ai.com or app.zorvexa-ai.com).
+# 3. Point DNS A/CNAME to this server; open ports 80 and 443.
+# 4. If Docker publishes the UI on 127.0.0.1:3000 only, this block is enough.
+
+app.example.com {
+	encode gzip
+	reverse_proxy 127.0.0.1:3000
+}
+
+# Optional: redirect apex → app
+# example.com {
+# 	redir https://app.example.com{uri}
+# }

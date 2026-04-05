@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Confirm your email</title>
+  </head>
+  <body style="margin:0;padding:24px;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f4f4f5;color:#18181b;">
+    <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;border:1px solid #e4e4e7;">
+      <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;">Confirm your email</h1>
+      <p style="margin:0 0 16px;line-height:1.5;font-size:15px;color:#3f3f46;">
+        Thanks for signing up for the <strong>Zorvexa</strong> app!
+      </p>
+      <p style="margin:0 0 24px;line-height:1.5;font-size:15px;color:#3f3f46;">
+        Please confirm your email address (<strong>{{ .Email }}</strong>) by clicking the button below:
+      </p>
+      <p style="margin:0 0 24px;">
+        <a
+          href="{{ .ConfirmationURL }}"
+          style="display:inline-block;padding:14px 28px;background:#18181b;color:#fafafa;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;"
+          >Verify Email</a
+        >
+      </p>
+      <p style="margin:0;font-size:13px;line-height:1.5;color:#71717a;">
+        If you didn't create an account, you can safely ignore this email.
+      </p>
+    </div>
+  </body>
+</html>

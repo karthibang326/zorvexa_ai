@@ -1,0 +1,24 @@
+<svg width="180" height="40" viewBox="0 0 180 40" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zorvexa">
+  <defs>
+    <linearGradient id="zxhl" x1="4" y1="2" x2="28" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5B4BD4"/>
+      <stop offset="1" stop-color="#00B8E6"/>
+    </linearGradient>
+  </defs>
+  <path
+    d="M6 11h16M22 11L6 27M6 27h16"
+    stroke="url(#zxhl)"
+    stroke-width="3.25"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <text
+    x="38"
+    y="27"
+    fill="#0B0F1A"
+    font-family="Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
+    font-size="19"
+    font-weight="600"
+    letter-spacing="-0.04em"
+  >Zorvexa</text>
+</svg>

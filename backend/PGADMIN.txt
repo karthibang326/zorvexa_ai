@@ -1,0 +1,28 @@
+pgAdmin 4 — connect to AstraOps local DB (Homebrew PostgreSQL 18)
+================================================================
+
+Use these values. Port 5432 on this Mac is usually a DIFFERENT PostgreSQL
+(PG 17 installer); your app user lives on port 5434.
+
+  General tab
+    Name:  AstraOps local (PG 18)
+
+  Connection tab
+    Host name/address:  127.0.0.1
+    Port:               5434
+    Maintenance database: astraops
+    Username:           astra_user
+    Password:           secure123
+    Save password:      optional (your choice)
+
+If connection fails, check the server is running:
+
+  /opt/homebrew/opt/postgresql@18/bin/pg_ctl -D /opt/homebrew/var/postgresql@18 status
+
+Start if needed:
+
+  /opt/homebrew/opt/postgresql@18/bin/pg_ctl -D /opt/homebrew/var/postgresql@18 -l /opt/homebrew/var/log/postgresql@18-server.log start
+
+DATABASE_URL for backend .env:
+
+  postgresql://astra_user:secure123@127.0.0.1:5434/astraops?schema=public
