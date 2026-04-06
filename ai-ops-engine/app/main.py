@@ -6,19 +6,25 @@ from pydantic import BaseModel, Field
 import json
 import asyncio
 import logging
-from .core.planner import PlannerAgent, Task
+from .core.planner import PlannerAgent, Task, DAG
 from .core.executor import ExecutorAgent, TaskResult
 from .core.validator import ValidatorAgent
-from .memory.engine import MemoryEngine, MemoryItem
+from .services.llm import OpenAIService
+from .memory.vector_store import FAISSVectorStore
+from .services.orchestrator import OrchestratorService
 
 app = FastAPI(title="Autonomous AI Ops Engine", version="1.0.0")
-planner = PlannerAgent()
-executor = ExecutorAgent()
-validator = ValidatorAgent()
-memory = MemoryEngine()
 
-# In-memory session tracking for demonstration (replace with Redis/SQL)
-sessions: Dict[str, Dict[str, Any]] = {}
+# 🏛️ Dependency Injection Setup (Production-Grade Architecture)
+llm = OpenAIService(api_key=os.getenv("OPENAI_API_KEY", "mock-key"))
+vector_store = FAISSVectorStore(dimension=1536)
+executor = ExecutorAgent()
+validator = ValidatorAgent(api_key=os.getenv("OPENAI_API_KEY"))
+orchestrator = OrchestratorService(llm, vector_store, executor, validator)
+
+# 💾 Scalability: Session Store (Abstraction over Redis or SQL)
+# For this demo, we maintain it in-process, but the interface is ready for a distributed store.
+execution_sessions: Dict[str, Dict[str, Any]] = {}
 
 class PlanRequest(BaseModel):
     user_intent: str
@@ -26,27 +32,35 @@ class PlanRequest(BaseModel):
 
 class ExecutionRequest(BaseModel):
     plan_id: str
-    dag: Any
 
 class AIExecuteResponse(BaseModel):
     execution_id: str
     status: str
     results: List[TaskResult]
+    dag: DAG
 
 @app.post("/ai/plan")
 async def create_plan(request: PlanRequest):
     """
     User Intent -> Structured Execution Plan (DAG)
+    Identifies if a similar plan already exists in semantic memory.
     """
     try:
         plan_id = str(uuid.uuid4())
-        # Check memory for similar past intents to improve plan
-        similar_past = await memory.search_similar(request.user_intent, top_k=2)
-        past_context = [s.dag_json for s in similar_past if s.status == "success"]
         
-        dag = await planner.plan(request.user_intent, context={**request.context, "past_successes": past_context})
+        # 1. Performance: Check semantic memory for context retrieval
+        query_vector = await llm.get_embedding(request.user_intent)
+        similar_past = await vector_store.search(query_vector, top_k=2)
+        past_context = [s["dag_json"] for s in similar_past if s["status"] == "success"]
         
-        sessions[plan_id] = {
+        # 2. Plan Generation
+        system_prompt = "You are a Cloud Ops Planner. Generate a JSON DAG."
+        user_prompt = f"Intent: {request.user_intent}\nKnown Patterns: {json.dumps(past_context)}"
+        
+        dag_json = await llm.generate_json(system_prompt, user_prompt)
+        dag = DAG(**dag_json)
+        
+        execution_sessions[plan_id] = {
             "intent": request.user_intent,
             "dag": dag.dict(),
             "status": "planned"
@@ -59,45 +73,34 @@ async def create_plan(request: PlanRequest):
 @app.post("/ai/execute")
 async def execute_plan(request: ExecutionRequest):
     """
-    Executes a structured DAG using the ExecutorAgent.
+    Autonomous Feedback Loop (Plan -> Execute -> Validate -> Fix -> Record).
+    Offloads to the Orchestrator for fault-tolerant execution.
     """
     try:
-        if request.plan_id not in sessions:
-            raise HTTPException(status_code=404, detail="Plan not found")
+        if request.plan_id not in execution_sessions:
+            raise HTTPException(status_code=404, detail="Plan session not found")
             
-        execution_id = str(uuid.uuid4())
-        sessions[request.plan_id]["status"] = "executing"
-        sessions[request.plan_id]["execution_id"] = execution_id
+        intent = execution_sessions[request.plan_id]["intent"]
+        execution_sessions[request.plan_id]["status"] = "executing"
         
-        # Execute tasks in the DAG
-        # We simulate asynchronous execution by awaiting the full DAG here for simplicity
-        # but in production, we would queue this in Celery/Kafka.
-        results = await executor.execute_dag(request.dag)
+        # TRIGGER THE AUTONOMOUS OODA LOOP
+        loop_result = await orchestrator.run_autonomous_loop(intent)
         
-        # Validate results
-        final_status = "success"
-        failures = []
-        for res in results:
-            if res.status == "failure":
-                final_status = "failure"
-                failures.append(res.error)
-
-        # Store in Memory Engine for future learning
-        item = MemoryItem(
-            id=execution_id,
-            task_id=request.plan_id,
-            user_intent=sessions[request.plan_id]["intent"],
-            dag_json=json.dumps(request.dag),
-            execution_results=json.dumps([r.dict() for r in results]),
-            status=final_status,
-            failure_reason=" | ".join(failures) if failures else None
+        # Final update of session state
+        execution_sessions[request.plan_id].update({
+            "status": loop_result["status"],
+            "results": loop_result["results"],
+            "dag": loop_result["dag"]
+        })
+        
+        return AIExecuteResponse(
+            execution_id=loop_result["plan_id"], 
+            status=loop_result["status"], 
+            results=loop_result["results"],
+            dag=loop_result["dag"]
         )
-        await memory.add_memory(item)
-        
-        sessions[request.plan_id]["status"] = final_status
-        sessions[request.plan_id]["results"] = results
-        
-        return AIExecuteResponse(execution_id=execution_id, status=final_status, results=results)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

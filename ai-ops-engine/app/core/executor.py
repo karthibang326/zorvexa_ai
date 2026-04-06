@@ -1,6 +1,6 @@
 import asyncio
 import httpx
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
 from .planner import Task, TaskType
 import json
@@ -11,6 +11,7 @@ class TaskResult(BaseModel):
     status: str # "success" | "failure"
     output: Any
     error: Optional[str] = None
+    fix_applied: Optional[str] = None
 
 class ExecutorAgent:
     def __init__(self):
