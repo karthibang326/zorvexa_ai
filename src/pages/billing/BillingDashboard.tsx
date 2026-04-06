@@ -272,7 +272,12 @@ export const BillingDashboard: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="text-sm font-mono font-bold">${inv.amount.toFixed(2)}</div>
-                    <a href={inv.stripeUrl} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors">
+                    <a 
+                      href={inv.stripeUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                    >
                       <Download className="w-4 h-4 text-zinc-400" />
                     </a>
                   </div>

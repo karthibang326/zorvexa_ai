@@ -41,6 +41,7 @@ export default function PricingPage() {
   const [plan, setPlan] = useState<ValuePlan>("growth");
   const [platformFeeUsd, setPlatformFeeUsd] = useState(0);
   const [netSavingsUsd, setNetSavingsUsd] = useState(0);
+  const [gstId, setGstId] = useState("");
   const [checkoutBusy, setCheckoutBusy] = useState<ValuePlan | null>(null);
 
   const savingsUsd = useMemo(() => Number(((cloudSpendUsd * savingsRate) / 100).toFixed(2)), [cloudSpendUsd, savingsRate]);
@@ -68,16 +69,14 @@ export default function PricingPage() {
       window.location.href = "mailto:sales@zorvexa.com?subject=Zorvexa%20Enterprise%20pricing";
       return;
     }
-    if (normalized === "starter") {
-      navigate("/dashboard?demo=1");
-      return;
-    }
-    const selectedPlan: ValuePlan = "growth";
+
+    const selectedPlan: ValuePlan = normalized as ValuePlan;
     if (!user?.email) {
       toast.info("Sign in to continue to checkout");
       navigate("/auth");
       return;
     }
+
     try {
       setCheckoutBusy(selectedPlan);
       const session = await createCheckout({
@@ -86,19 +85,20 @@ export default function PricingPage() {
         plan: selectedPlan,
         successUrl: `${window.location.origin}/billing/success`,
         cancelUrl: `${window.location.origin}/billing/cancel`,
+        gstId: gstId.trim() || undefined
       });
-      if (session.configured === false) {
-        toast.error(session.hint ?? "Payments are not configured on the server yet.");
-        return;
-      }
-      if (session.simulated) {
-        toast.warning("Dummy checkout only (BILLING_DUMMY_CHECKOUT). Use real Stripe for secure payments.");
-      }
+      
       if (session.url?.startsWith("http")) {
         window.location.href = session.url;
         return;
       }
-      toast.error("Checkout URL missing. Check Stripe keys and price IDs on the API.");
+      
+      if (session.configured === false) {
+        toast.error(session.hint ?? "Payments are not configured on the server yet.");
+        return;
+      }
+      
+      toast.error("Checkout initialization failed. Please try again.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Unable to open checkout");
     } finally {
@@ -184,6 +184,16 @@ export default function PricingPage() {
                 <option value="growth">Growth</option>
                 <option value="enterprise">Enterprise</option>
               </select>
+            </label>
+            <label className="text-sm text-slate-200">
+              GSTIN (Optional - India B2B)
+              <input
+                type="text"
+                placeholder="27AAAAA0000A1Z5"
+                value={gstId}
+                onChange={(e) => setGstId(e.target.value.toUpperCase())}
+                className="mt-2 h-10 w-full rounded-xl border border-white/15 bg-[#0f172a] px-3 text-white placeholder:text-slate-600 focus:border-blue-400 focus:outline-none transition-colors"
+              />
             </label>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-3">

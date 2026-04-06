@@ -72,14 +72,13 @@ export async function getBillingDashboard() {
 
 export async function createCheckout(input: {
   customerEmail: string;
+  tenantId: string;
   plan: ValuePlan;
   successUrl: string;
   cancelUrl: string;
+  gstId?: string;
 }) {
-  const { data } = await api.post("/billing/create-checkout", {
-    provider: "stripe",
-    ...input,
-  });
+  const { data } = await api.post("/billing/create-checkout", input);
   return data as {
     id: string;
     url: string;

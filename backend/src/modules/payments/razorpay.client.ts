@@ -28,6 +28,7 @@ export async function createRazorpayOrder(input: {
   plan: "starter" | "growth" | "enterprise";
   tenantId?: string;
   amountPaise?: number;
+  notes?: Record<string, any>; // Support dynamic compliance metadata
 }): Promise<RazorpayOrderResult> {
   const keyId = env.RAZORPAY_KEY_ID.trim();
   const keySecret = env.RAZORPAY_KEY_SECRET.trim();
@@ -49,7 +50,11 @@ export async function createRazorpayOrder(input: {
       amount,
       currency: "INR",
       receipt,
-      notes: { tenantId: input.tenantId ?? "", plan: input.plan },
+      notes: { 
+        tenantId: input.tenantId ?? "", 
+        plan: input.plan,
+        ...input.notes
+      },
     }),
   });
 

@@ -9,7 +9,10 @@ export async function billingRoutes(app: FastifyInstance) {
     const parsed = CreateCheckoutSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
     try {
-      const session = await billingService.createCheckoutSession(parsed.data as any);
+      const session = await billingService.createCheckoutSession({
+        ...(parsed.data as any),
+        req: request // Pass the request for region detection
+      });
       return reply.code(201).send(session);
     } catch (e) {
       return reply.code(500).send({ error: e instanceof Error ? e.message : "Failed to create checkout session" });

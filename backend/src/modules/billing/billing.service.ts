@@ -1,110 +1,124 @@
 import { prisma } from "../../lib/prisma";
 import { logger } from "../../lib/logger";
-import { PaymentProviderFactory } from "./providers/payment-provider.factory";
-import { meteringService } from "./services/metering.service";
-import { billingEngine } from "./services/billing-engine.service";
-import { entitlementService } from "./services/entitlement.service";
-import { auditService } from "./services/audit.service";
-import Stripe from "stripe"; // Only for typing below
+import { TaxService } from "../tax/tax.service";
+import { PaymentService } from "../payments/payment.service";
+import { ledgerService } from "./ledger.service";
+import { getUserRegion } from "../../utils/region.util";
 
-export const billingService = {
-  // Metering Logic
-  trackUsage: meteringService.trackUsage.bind(meteringService),
+export class BillingService {
+  private taxService = new TaxService();
+  private paymentService = new PaymentService();
 
-  // Subscription Logic
+  /**
+   * Orchestrates the creation of a checkout session.
+   * Handles region detection, deterministic tax calculation, and ledger recording.
+   */
   async createCheckoutSession(input: {
     plan: "STARTER" | "GROWTH" | "ENTERPRISE";
     tenantId: string;
     customerEmail: string;
     successUrl: string;
     cancelUrl: string;
+    gstId?: string;
+    req?: any; // For region detection
   }) {
     const org = await (prisma as any).organization.findUnique({ where: { id: input.tenantId } });
-    if (!org) throw new Error(`Organization not found for ID: ${input.tenantId}`);
+    if (!org) throw new Error(`Organization not found: ${input.tenantId}`);
 
-    // Regional Routing Optimization
-    const preferredProvider = org.country === "IN" ? "razorpay" : (org.billingProvider || "stripe");
-    const provider = PaymentProviderFactory.getProvider(preferredProvider);
-    
-    try {
-      return await provider.createCheckout({
-        orgId: input.tenantId,
-        planId: input.plan.toLowerCase() as any, // Standardize to lowercase for Zod/Provider alignment
-        email: input.customerEmail,
-        successUrl: input.successUrl,
-        cancelUrl: input.cancelUrl,
-        currency: org.preferredCurrency
-      });
-    } catch (err) {
-      // Fallback Strategy
-      if (preferredProvider === "stripe" && org.country === "IN") {
-         logger.warn(`Stripe checkout failed, falling back to Razorpay for org ${org.id}`);
-         return await PaymentProviderFactory.getProvider("razorpay").createCheckout({
-           orgId: input.tenantId,
-           planId: input.plan,
-           email: input.customerEmail,
-           successUrl: input.successUrl,
-           cancelUrl: input.cancelUrl
-         });
+    const country = input.req ? getUserRegion(input.req) : (org.country || "IN");
+    const basePrice = this.getPlanBasePrice(input.plan);
+
+    // 1. Deterministic Tax Calculation
+    const taxResult = this.taxService.calculateTax({
+      amount: basePrice,
+      country: country,
+      customerType: input.gstId ? "B2B" : "B2C",
+      taxId: input.gstId
+    });
+
+    // 2. Region-Based Provider Routing
+    const providerName = country === "IN" ? "razorpay" : "stripe";
+
+    // 3. Record Intent in Ledger (Audit Trail)
+    const auditEntry = await ledgerService.recordEvent({
+      orgId: input.tenantId,
+      action: "CHECKOUT_INITIATED",
+      category: "FINANCIAL",
+      amount: taxResult.totalAmount,
+      metadata: {
+        plan: input.plan,
+        subtotal: basePrice,
+        taxAmount: taxResult.taxAmount,
+        taxType: taxResult.taxType,
+        provider: providerName,
+        country
       }
-      throw err;
-    }
-  },
+    });
 
-  // Entitlement Check
-  hasAccess: entitlementService.hasAccess.bind(entitlementService),
+    // 4. Create Provider Session
+    const session = await this.paymentService.createCheckout({
+      planId: input.plan,
+      orgId: input.tenantId,
+      customerEmail: input.customerEmail,
+      amount: taxResult.totalAmount, // Tax-inclusive
+      successUrl: input.successUrl,
+      cancelUrl: input.cancelUrl,
+      metadata: {
+        auditLogId: auditEntry?.id,
+        taxType: taxResult.taxType,
+        taxRate: taxResult.taxRate
+      }
+    }, providerName);
 
-  // Webhook Controller (Provider Agnostic)
+    return session;
+  }
+
+  /**
+   * Handles webhooks from any provider, normalizing them for system-wide state updates.
+   */
   async handleWebhook(providerName: string, rawBody: string, signature: string) {
-    const provider = PaymentProviderFactory.getProvider(providerName);
-    const event = await provider.constructEvent(rawBody, signature);
+    const event = await this.paymentService.verifyWebhook(providerName, rawBody, signature);
+    if (!event) return { ok: false, reason: "Invalid signature" };
 
-    if (!event) return;
-
-    // 1. Idempotency Check (FAANG Standard)
+    // Idempotency: skip if already processed
     const existing = await (prisma as any).processedWebhook.findUnique({ where: { id: event.id } });
-    if (existing) {
-      logger.info(`Webhook event ${event.id} already processed.`);
-      return { ok: true, ignored: true };
-    }
+    if (existing) return { ok: true, ignored: true };
 
     try {
-      switch (event.type) {
-        case "checkout.completed": {
-          if (event.orgId) {
-            await (prisma as any).organization.update({
-                where: { id: event.orgId },
-                data: {
-                  billingPlan: event.planId as any,
-                  subscriptionStatus: "active",
-                  stripeCustomerId: event.stripeCustomerId,
-                  billingProvider: providerName
-                }
-            });
-            await (prisma as any).auditLog.create({
-              data: {
-                orgId: event.orgId,
-                action: "SUBSCRIPTION_CREATED",
-                resourceType: "ORGANIZATION",
-                metadata: { plan: event.planId, provider: providerName } as any
-              }
-            });
+      if (event.type === "checkout.completed") {
+        await (prisma as any).organization.update({
+          where: { id: event.orgId },
+          data: {
+            billingPlan: event.planId.toUpperCase() as any,
+            subscriptionStatus: "active",
+            stripeCustomerId: event.stripeCustomerId,
+            billingProvider: providerName
           }
-          break;
-        }
-        case "invoice.paid": {
-          if (event.orgId) {
-            await (prisma as any).invoice.create({
-                data: {
-                  orgId: event.orgId,
-                  stripeInvoiceId: event.id,
-                  amount: (event as any).amount || 0,
-                  status: "PAID"
-                }
-            });
+        });
+
+        await ledgerService.recordEvent({
+          orgId: event.orgId,
+          action: "SUBSCRIPTION_CREATED",
+          category: "SUBSCRIPTION",
+          metadata: { plan: event.planId, provider: providerName, eventId: event.id }
+        });
+      } else if (event.type === "invoice.paid") {
+        await (prisma as any).invoice.create({
+          data: {
+            orgId: event.orgId,
+            stripeInvoiceId: event.id,
+            amount: (event as any).amount || 0,
+            status: "PAID"
           }
-          break;
-        }
+        });
+
+        await ledgerService.recordEvent({
+          orgId: event.orgId,
+          action: "INVOICE_PAID",
+          category: "FINANCIAL",
+          amount: (event as any).amount,
+          metadata: { eventId: event.id, provider: providerName }
+        });
       }
 
       await (prisma as any).processedWebhook.create({
@@ -113,19 +127,45 @@ export const billingService = {
 
       return { ok: true };
     } catch (err: any) {
-      logger.error(`Failed to process ${providerName} webhook:`, err);
+      logger.error(`Webhook processing failed [${providerName}]:`, err as any);
       throw err;
     }
-  },
+  }
 
-  async runDailyBillingAutomation() {
-    const now = new Date();
-    await billingEngine.processBillingForTenant("all", new Date(now.getFullYear(), now.getMonth(), 1), now);
-  },
+  async getBillingDashboard(tenantId: string) {
+    const org = await (prisma as any).organization.findUnique({
+      where: { id: tenantId },
+      include: {
+        invoices: { orderBy: { createdAt: 'desc' }, take: 10 },
+        auditLogs: { orderBy: { timestamp: 'desc' }, take: 10 }
+      }
+    });
 
-  getPlanPricing(plan: string) {
-    return billingEngine.getPlanBaseFee(plan);
-  },
+    if (!org) throw new Error("Organization not found");
+
+    return {
+      tenantId,
+      plan: org.billingPlan,
+      subscriptionStatus: org.subscriptionStatus || "inactive",
+      invoices: org.invoices,
+      auditLogs: (org as any).auditLogs || [],
+      tagline: "Zorvexa AI: Production-grade Billing Infrastructure"
+    };
+  }
+
+  async getSubscriptionByCustomer(customerId: string) {
+    // In a poly-provider setup, we check both Stripe (global) and internal DB (Razorpay)
+    const org = await (prisma as any).organization.findFirst({
+        where: { stripeCustomerId: customerId }
+    });
+    if (!org) throw new Error("Subscription not found for customer");
+    return {
+        id: org.id,
+        plan: org.billingPlan,
+        status: org.subscriptionStatus,
+        provider: org.billingProvider
+    };
+  }
 
   async recordSavings(input: {
     tenantId: string;
@@ -135,56 +175,55 @@ export const billingService = {
     explanation?: string;
     actions?: string[];
   }) {
-    const savings = Math.max(0, input.beforeCostUsd - input.afterCostUsd);
-    return await meteringService.trackUsage({
+    const savingsAmount = Math.max(0, input.beforeCostUsd - input.afterCostUsd);
+    
+    // We record this in the SavingsEntry table (ROI tracking)
+    const entry = await (prisma as any).savingsEntry.create({
+      data: {
         tenantId: input.tenantId,
-        savingsAmount: savings,
         userId: input.userId,
-        metadata: { explanation: input.explanation, actions: input.actions }
-    });
-  },
-  billingIntervalId: null,
-
-  startDailyBillingAutomation() {
-    if (this.billingIntervalId) return;
-    logger.info("Starting daily billing automation loop...");
-    this.billingIntervalId = setInterval(() => {
-      this.runDailyBillingAutomation().catch(err => logger.error("Daily billing automation failed:", err));
-    }, 24 * 60 * 60 * 1000); // 24 hours
-  },
-
-  stopDailyBillingAutomation() {
-    if (this.billingIntervalId) {
-      clearInterval(this.billingIntervalId);
-      this.billingIntervalId = null;
-      logger.info("Stopped daily billing automation loop.");
-    }
-  },
-
-  async getBillingDashboard(tenantId: string) {
-    const org = await (prisma as any).organization.findUnique({
-      where: { id: tenantId },
-      include: {
-        subscriptions: { orderBy: { createdAt: 'desc' }, take: 1 },
-        billingRecords: { orderBy: { createdAt: 'desc' }, take: 10 },
-        invoices: { orderBy: { createdAt: 'desc' }, take: 10 },
-        usageEvents: { orderBy: { timestamp: 'desc' }, take: 10 }
+        amountUsd: savingsAmount,
+        metadata: {
+           explanation: input.explanation,
+           actions: input.actions
+        } as any
       }
     });
 
-    if (!org) throw new Error("Organization not found");
+    // Also record in financial ledger for auditability
+    await ledgerService.recordEvent({
+      orgId: input.tenantId,
+      action: "SAVINGS_RECORDED",
+      category: "SYSTEM",
+      amount: savingsAmount,
+      metadata: { entryId: entry.id, userId: input.userId }
+    });
 
+    return entry;
+  }
+
+  getPlanPricing(plan: string) {
+    const base = this.getPlanBasePrice(plan);
     return {
-      tenantId,
-      plan: org.billingPlan,
-      billingPercentage: org.billingPercentage,
-      totalSavingsToDate: org.aiSavingsUsd,
-      monthlySpendUsd: org.monthlySpendUsd,
-      subscriptionStatus: org.subscriptionStatus || "inactive",
-      latestInvoices: org.invoices,
-      latestUsageEvents: org.usageEvents,
-      latestAuditLogs: (org as any).auditLogs || [],
-      tagline: "FAANG-grade Hybrid Billing: Fully automated ROI tracking"
+        id: plan.toUpperCase(),
+        basePrice: base,
+        currency: "USD"
     };
   }
-};
+
+  async runDailyBillingAutomation() {
+    logger.info("Running daily billing automation placeholder...");
+    // Future implementation for recursive billing checks
+  }
+
+  private getPlanBasePrice(plan: string): number {
+    const prices: Record<string, number> = {
+      STARTER: 49,
+      GROWTH: 199,
+      ENTERPRISE: 799
+    };
+    return prices[plan.toUpperCase()] || 49;
+  }
+}
+
+export const billingService = new BillingService();

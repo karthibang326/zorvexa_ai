@@ -1,9 +1,11 @@
 export interface CheckoutSessionInput {
   orgId: string;
   planId: string;
-  email: string;
+  customerEmail: string;
   successUrl: string;
   cancelUrl: string;
+  amount: number; // Tax-inclusive total amount
+  metadata?: Record<string, any>;
   currency?: string;
 }
 

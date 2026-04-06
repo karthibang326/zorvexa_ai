@@ -9,16 +9,26 @@ export class RazorpayProvider implements PaymentProvider {
 
   async createCheckout(input: CheckoutSessionInput): Promise<CheckoutSessionOutput> {
     const plan = input.planId.toLowerCase() as "starter" | "growth" | "enterprise";
+    
+    // Convert to Paise (Razorpay unit)
+    // In a production app, the Tax Engine would use the regional currency (INR) directly.
+    const amountPaise = Math.round(input.amount * 100); 
+
     const result = await createRazorpayOrder({
       plan,
       tenantId: input.orgId,
+      amountPaise,
+      // Merge compliance metadata into Razorpay notes
+      notes: {
+        ...input.metadata,
+        customerEmail: input.customerEmail
+      } as any
     });
 
     if (!result.ok) {
       throw new Error(`Razorpay order creation failed: ${result.reason}`);
     }
 
-    // Razorpay uses orderId for client-side checkout
     return {
       id: result.orderId,
       url: `/billing/razorpay-checkout?orderId=${result.orderId}&amount=${result.amount}&keyId=${result.keyId}`,

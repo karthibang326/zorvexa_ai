@@ -24,6 +24,7 @@ export class StripeProvider implements PaymentProvider {
 
     const session = await this.stripe.checkout.sessions.create({
       payment_method_types: ["card"],
+      automatic_tax: { enabled: true },
       line_items: [
         {
           price: priceId,
@@ -33,8 +34,12 @@ export class StripeProvider implements PaymentProvider {
       mode: "subscription",
       success_url: input.successUrl,
       cancel_url: input.cancelUrl,
-      customer_email: input.email,
-      metadata: { orgId: input.orgId, planId: input.planId },
+      customer_email: input.customerEmail,
+      metadata: { 
+        orgId: input.orgId, 
+        planId: input.planId,
+        ...input.metadata
+      },
     });
 
     return {
