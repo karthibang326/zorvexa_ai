@@ -38,6 +38,9 @@ model Organization {
   ownerId            String
   stripeCustomerId   String?         @unique
   billingPlan        PlanType        @default(FREE)
+  billingProvider    String          @default("stripe") // stripe, razorpay
+  country            String?         @default("US")     // Used for routing
+  preferredCurrency  String          @default("USD")
   billingPercentage  Float           @default(0.15) // Default 15% for Starter
   subscriptionStatus String?         // active, past_due, canceled, etc.
   monthlySpendUsd    Decimal         @default(0) @db.Decimal(12, 2)

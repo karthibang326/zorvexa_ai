@@ -23,39 +23,62 @@ import {
   ResponsiveContainer,
   Cell
 } from "recharts";
+import { UpgradeButton } from "../../components/billing/UpgradeButton";
+
+interface BillingData {
+  tenantId: string;
+  customerEmail: string;
+  plan: string;
+  billingPercentage: number;
+  totalSavingsToDate: number;
+  monthlySpendUsd: number;
+  subscriptionStatus: string;
+  baseFee: number;
+  usageFee: number;
+  savingsPercentage: number;
+  forecast: {
+    nextMonthSavings: number;
+    nextMonthBill: number;
+    confidence: number;
+  };
+  aiInsights: {
+    explanation: string;
+    strategies: string[];
+  };
+  resources: { name: string; original: number; optimized: number; savings: number }[];
+  invoices: { id: string; date: string; amount: number; status: string; stripeUrl: string }[];
+}
 
 // Mock API Call - In production, this targets /api/usage/summary and /api/ai/insights
-const fetchBillingData = async () => {
+const fetchBillingData = async (): Promise<BillingData> => {
   // Simulate API latency
   await new Promise(r => setTimeout(r, 1000));
   return {
-    tenantId: "org-zorvexa-1",
-    plan: "GROWTH",
-    billingPercentage: 0.10,
-    totalSavingsToDate: 12450.50,
-    monthlySpendUsd: 1432.20,
+    tenantId: "org-1",
+    customerEmail: "user@example.com",
+    plan: "FREE",
+    billingPercentage: 0.15,
+    totalSavingsToDate: 450.50,
+    monthlySpendUsd: 142.20,
     subscriptionStatus: "active",
-    baseFee: 199.00,
-    usageFee: 1233.20,
-    savingsPercentage: 32.4,
+    baseFee: 0,
+    usageFee: 0,
+    savingsPercentage: 15.4,
     forecast: {
-      nextMonthSavings: 15200,
-      nextMonthBill: 1719,
-      confidence: 0.92
+      nextMonthSavings: 1200,
+      nextMonthBill: 179,
+      confidence: 0.88
     },
     aiInsights: {
-      explanation: "Significant savings this month driven by autonomous RDS scaling and proactive S3 lifecycle cleanup during off-peak hours.",
-      strategies: ["Predictive Scaling", "Idle Resource Suspension", "Right-sizing Recommendations"]
+      explanation: "Initial savings driven by idle resource suspension and autonomous RDS right-sizing.",
+      strategies: ["Predictive Scaling", "Idle Resource Suspension"]
     },
     resources: [
-      { name: "Production Database (RDS)", original: 2400, optimized: 1100, savings: 1300 },
-      { name: "Elasticsearch Cluster", original: 850, optimized: 420, savings: 430 },
-      { name: "Frontend CDN (CloudFront)", original: 320, optimized: 210, savings: 110 },
-      { name: "Dev/Staging Nodes", original: 1200, optimized: 150, savings: 1050 }
+      { name: "Dev/Staging Nodes", original: 800, optimized: 150, savings: 650 },
+      { name: "Frontend CDN (CloudFront)", original: 120, optimized: 85, savings: 35 },
     ],
     invoices: [
-      { id: "inv_123", date: "2024-03-01", amount: 1342.10, status: "PAID", stripeUrl: "#" },
-      { id: "inv_122", date: "2024-02-01", amount: 1120.50, status: "PAID", stripeUrl: "#" }
+      { id: "inv_march", date: "2024-03-01", amount: 0, status: "PAID", stripeUrl: "#" }
     ]
   };
 };
@@ -80,18 +103,16 @@ export const BillingDashboard: React.FC = () => {
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Billing & Savings</h1>
-          <p className="text-zinc-500 dark:text-zinc-400 mt-1 flex items-center gap-2">
-            <Calendar className="w-4 h-4" /> Current Period: March 1 - March 31, 2024
+          <p className="text-zinc-500 dark:text-zinc-400 mt-1 flex items-center gap-2 text-sm leading-relaxed font-medium">
+             Maximize your cloud efficiency with AI-driven ROI tracking.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <div className="px-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-sm flex items-center gap-2">
-            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-            <span className="text-sm font-medium">Plan: {data.plan}</span>
+            <div className={`w-2 h-2 ${data.plan === 'FREE' ? 'bg-zinc-400' : 'bg-emerald-500'} rounded-full animate-pulse`} />
+            <span className="text-xs font-bold uppercase tracking-wider">Plan: {data.plan}</span>
           </div>
-          <button className="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity">
-            Manage Subscription
-          </button>
+          <UpgradeButton plan={data.plan} tenantId={data.tenantId} customerEmail={data.customerEmail} />
         </div>
       </header>
 

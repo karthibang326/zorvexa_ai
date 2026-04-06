@@ -16,21 +16,35 @@ export async function billingRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post("/webhook", async (request, reply) => {
+  app.post("/webhook/stripe", async (request, reply) => {
     try {
       const signature = request.headers["stripe-signature"] as string | undefined;
       const rawBody = typeof request.body === "string" ? request.body : JSON.stringify(request.body ?? {});
-      const event = billingService.verifyWebhookSignature(rawBody, signature);
-      const handled = await billingService.handleWebhookEvent(event as any);
-      return reply.code(200).send({
-        received: true,
-        mode: event ? "verified" : "passthrough",
-        type: event?.type ?? (request.body as any)?.type ?? "unknown",
-        handled,
-      });
+      await billingService.handleWebhook("stripe", rawBody, signature || "");
+      return reply.code(200).send({ received: true });
     } catch (e) {
-      return reply.code(400).send({ error: e instanceof Error ? e.message : "Invalid webhook" });
+      return reply.code(400).send({ error: e instanceof Error ? e.message : "Stripe webhook failed" });
     }
+  });
+
+  app.post("/webhook/razorpay", async (request, reply) => {
+    try {
+      const signature = request.headers["x-razorpay-signature"] as string | undefined;
+      const rawBody = typeof request.body === "string" ? request.body : JSON.stringify(request.body ?? {});
+      await billingService.handleWebhook("razorpay", rawBody, signature || "");
+      return reply.code(200).send({ received: true });
+    } catch (e) {
+      return reply.code(400).send({ error: e instanceof Error ? e.message : "Razorpay webhook failed" });
+    }
+  });
+
+  // Backward compatible / legacy universal webhook
+  app.post("/webhook", async (request, reply) => {
+    const provider = request.headers["stripe-signature"] ? "stripe" : "razorpay";
+    const signature = (request.headers["stripe-signature"] || request.headers["x-razorpay-signature"]) as string;
+    const rawBody = typeof request.body === "string" ? request.body : JSON.stringify(request.body ?? {});
+    await billingService.handleWebhook(provider, rawBody, signature || "");
+    return { received: true, provider };
   });
 
   app.get("/subscription", { preHandler: authenticate }, async (request, reply) => {

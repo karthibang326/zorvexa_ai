@@ -11,6 +11,7 @@ import {
   Globe2,
   Server,
   Shield,
+  CreditCard,
 } from "lucide-react";
 
 export interface NavItem {
@@ -91,6 +92,12 @@ export const NAVIGATION_CONFIG: NavGroup[] = [
         label: "Tenant console",
         icon: Building2,
         description: "Org billing, members, and workspace admin",
+      },
+      {
+        id: "billing",
+        label: "Billing & ROI",
+        icon: CreditCard,
+        description: "Cloud savings, plan management, and invoices",
       },
       {
         id: "audit",

@@ -31,6 +31,7 @@ const WorkloadLocationView = lazy(() => import("@/components/dashboard/WorkloadL
 const GovernanceView = lazy(() => import("@/components/dashboard/GovernanceView"));
 const AISimulationView = lazy(() => import("@/components/dashboard/AISimulationView"));
 const AstraOpsPipelineView = lazy(() => import("@/components/dashboard/AstraOpsPipelineView"));
+const BillingDashboard = lazy(() => import("@/pages/billing/BillingDashboard").then(module => ({ default: module.BillingDashboard })));
 import { SimulationPreviewProvider } from "@/contexts/SimulationPreviewContext";
 import { AiStreamProvider } from "@/contexts/AiStreamContext";
 import { useRun } from "@/hooks/useRun";
@@ -337,7 +338,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialTab = "overview" }) => {
         learningInsight: out.lastSummary?.learningInsight,
         memoryCount: mem.stats?.count ?? 0,
         avgReward: mem.stats?.avgReward,
-        successRatePct,
+        successRatePct: successRatePct ?? undefined,
         correlationId: out.lastSummary?.correlationId,
         metricsSource: out.metricsSource ?? out.lastSummary?.metricsSource,
         reasoning: (out.lastSummary as { reasoning?: string })?.reasoning,
@@ -588,7 +589,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialTab = "overview" }) => {
       case "workload-location": return <WorkloadLocationView />;
       case "governance":        return <GovernanceView />;
       case "integrations": return <IntegrationsView />;
-      case "billing": return <SettingsView />;
+      case "billing": return <BillingDashboard />;
       case "settings": return <SettingsView />;
       // Security
       case "security": return <SecurityView />;

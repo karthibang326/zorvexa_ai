@@ -1,10 +1,11 @@
+import { prisma } from "../../lib/prisma";
+import { logger } from "../../lib/logger";
+import { PaymentProviderFactory } from "./providers/payment-provider.factory";
 import { meteringService } from "./services/metering.service";
-import { stripeService } from "./services/stripe.service";
 import { billingEngine } from "./services/billing-engine.service";
 import { entitlementService } from "./services/entitlement.service";
 import { auditService } from "./services/audit.service";
-import { prisma } from "../../lib/prisma";
-import { logger } from "../../lib/logger";
+import Stripe from "stripe"; // Only for typing below
 
 export const billingService = {
   // Metering Logic
@@ -19,35 +20,45 @@ export const billingService = {
     cancelUrl: string;
   }) {
     const org = await (prisma as any).organization.findUnique({ where: { id: input.tenantId } });
-    if (!org) throw new Error("Organization not found");
+    if (!org) throw new Error(`Organization not found for ID: ${input.tenantId}`);
 
-    const customer = await stripeService.getOrCreateCustomer(input.tenantId, input.customerEmail, org.name);
+    // Regional Routing Optimization
+    const preferredProvider = org.country === "IN" ? "razorpay" : (org.billingProvider || "stripe");
+    const provider = PaymentProviderFactory.getProvider(preferredProvider);
     
-    // In production, get these Price IDs from environment variables
-    const priceId = this.getPlanPriceId(input.plan);
-
-    return stripeService.createCheckoutSession({
-      customerId: customer.id,
-      tenantId: input.tenantId,
-      priceId,
-      plan: input.plan,
-      successUrl: input.successUrl,
-      cancelUrl: input.cancelUrl
-    });
+    try {
+      return await provider.createCheckout({
+        orgId: input.tenantId,
+        planId: input.plan.toLowerCase() as any, // Standardize to lowercase for Zod/Provider alignment
+        email: input.customerEmail,
+        successUrl: input.successUrl,
+        cancelUrl: input.cancelUrl,
+        currency: org.preferredCurrency
+      });
+    } catch (err) {
+      // Fallback Strategy
+      if (preferredProvider === "stripe" && org.country === "IN") {
+         logger.warn(`Stripe checkout failed, falling back to Razorpay for org ${org.id}`);
+         return await PaymentProviderFactory.getProvider("razorpay").createCheckout({
+           orgId: input.tenantId,
+           planId: input.plan,
+           email: input.customerEmail,
+           successUrl: input.successUrl,
+           cancelUrl: input.cancelUrl
+         });
+      }
+      throw err;
+    }
   },
 
   // Entitlement Check
   hasAccess: entitlementService.hasAccess.bind(entitlementService),
 
-  getPlanPriceId(plan: string) {
-    // These should definitely be in env vars for a FAANG-grade system
-    if (plan === "GROWTH") return process.env.STRIPE_PRICE_GROWTH || "price_growth_default";
-    if (plan === "ENTERPRISE") return process.env.STRIPE_PRICE_ENTERPRISE || "price_enterprise_default";
-    return process.env.STRIPE_PRICE_STARTER || "price_starter_default";
-  },
+  // Webhook Controller (Provider Agnostic)
+  async handleWebhook(providerName: string, rawBody: string, signature: string) {
+    const provider = PaymentProviderFactory.getProvider(providerName);
+    const event = await provider.constructEvent(rawBody, signature);
 
-  // Webhook Controller Port
-  async handleWebhookEvent(event: any) {
     if (!event) return;
 
     // 1. Idempotency Check (FAANG Standard)
@@ -58,69 +69,36 @@ export const billingService = {
     }
 
     try {
-      const type = event.type;
-      switch (type) {
-        case "checkout.session.completed": {
-          const session = event.data.object;
-          const tenantId = session.metadata?.tenantId;
-          const plan = (session.metadata?.plan || "STARTER") as any;
-          
-          if (tenantId) {
+      switch (event.type) {
+        case "checkout.completed": {
+          if (event.orgId) {
             await (prisma as any).organization.update({
-                where: { id: tenantId },
+                where: { id: event.orgId },
                 data: {
-                  billingPlan: plan,
+                  billingPlan: event.planId as any,
                   subscriptionStatus: "active",
-                  stripeCustomerId: session.customer
+                  stripeCustomerId: event.stripeCustomerId,
+                  billingProvider: providerName
                 }
             });
-            await auditService.log({
-                orgId: tenantId,
+            await (prisma as any).auditLog.create({
+              data: {
+                orgId: event.orgId,
                 action: "SUBSCRIPTION_CREATED",
                 resourceType: "ORGANIZATION",
-                metadata: { plan, stripeCustomerId: session.customer } as any
+                metadata: { plan: event.planId, provider: providerName } as any
+              }
             });
-          }
-          break;
-        }
-        case "customer.subscription.updated":
-        case "customer.subscription.deleted": {
-          const sub = event.data.object;
-          const tenantId = sub.metadata?.tenantId;
-          if (tenantId) {
-             await (prisma as any).subscription.upsert({
-                where: { stripeSubscriptionId: sub.id },
-                create: {
-                  orgId: tenantId,
-                  stripeSubscriptionId: sub.id,
-                  planId: (sub.metadata?.plan || "STARTER") as any,
-                  status: sub.status,
-                  currentPeriodStart: new Date(sub.current_period_start * 1000),
-                  currentPeriodEnd: new Date(sub.current_period_end * 1000)
-                },
-                update: {
-                  status: sub.status,
-                  currentPeriodStart: new Date(sub.current_period_start * 1000),
-                  currentPeriodEnd: new Date(sub.current_period_end * 1000)
-                }
-             });
-
-             await (prisma as any).organization.update({
-                where: { id: tenantId },
-                data: { subscriptionStatus: sub.status }
-             });
           }
           break;
         }
         case "invoice.paid": {
-          const invoice = event.data.object;
-          const tenantId = invoice.metadata?.tenantId;
-          if (tenantId) {
+          if (event.orgId) {
             await (prisma as any).invoice.create({
                 data: {
-                  orgId: tenantId,
-                  stripeInvoiceId: invoice.id,
-                  amount: invoice.amount_paid / 100,
+                  orgId: event.orgId,
+                  stripeInvoiceId: event.id,
+                  amount: (event as any).amount || 0,
                   status: "PAID"
                 }
             });
@@ -129,29 +107,18 @@ export const billingService = {
         }
       }
 
-      // Mark event as processed (At-least-once → Exactly-once processing)
       await (prisma as any).processedWebhook.create({
         data: { id: event.id, type: event.type }
       });
 
       return { ok: true };
-    } catch (err) {
-      logger.error("Failed to process Stripe webhook:", err);
+    } catch (err: any) {
+      logger.error(`Failed to process ${providerName} webhook:`, err);
       throw err;
     }
   },
 
-  // Delegations for backward compatibility / routes
-  async getSubscriptionByCustomer(customerId: string) {
-    return stripeService.getLatestInvoice(customerId); // Simplified or list
-  },
-
-  verifyWebhookSignature(rawBody: string, signature?: string) {
-    return stripeService.constructEvent(rawBody, signature || "");
-  },
-
   async runDailyBillingAutomation() {
-    // In our new high-grade system, this triggers the billing engine
     const now = new Date();
     await billingEngine.processBillingForTenant("all", new Date(now.getFullYear(), now.getMonth(), 1), now);
   },
@@ -175,6 +142,23 @@ export const billingService = {
         userId: input.userId,
         metadata: { explanation: input.explanation, actions: input.actions }
     });
+  },
+  billingIntervalId: null,
+
+  startDailyBillingAutomation() {
+    if (this.billingIntervalId) return;
+    logger.info("Starting daily billing automation loop...");
+    this.billingIntervalId = setInterval(() => {
+      this.runDailyBillingAutomation().catch(err => logger.error("Daily billing automation failed:", err));
+    }, 24 * 60 * 60 * 1000); // 24 hours
+  },
+
+  stopDailyBillingAutomation() {
+    if (this.billingIntervalId) {
+      clearInterval(this.billingIntervalId);
+      this.billingIntervalId = null;
+      logger.info("Stopped daily billing automation loop.");
+    }
   },
 
   async getBillingDashboard(tenantId: string) {
