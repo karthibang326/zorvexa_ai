@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import PublicLayout from "@/components/layout/PublicLayout";
 import { createCheckout, estimateValuePricing, type ValuePlan } from "@/lib/billing";
 import { useAuth } from "@/hooks/useAuth";
+import { useContextStore } from "@/store/context";
 import { toast } from "sonner";
 
 const tiers = [
@@ -33,6 +34,7 @@ const tiers = [
 
 export default function PricingPage() {
   const { user } = useAuth();
+  const { orgId } = useContextStore();
   const navigate = useNavigate();
   const [cloudSpendUsd, setCloudSpendUsd] = useState(50000);
   const [savingsRate, setSavingsRate] = useState(18);
@@ -80,6 +82,7 @@ export default function PricingPage() {
       setCheckoutBusy(selectedPlan);
       const session = await createCheckout({
         customerEmail: user.email,
+        tenantId: orgId,
         plan: selectedPlan,
         successUrl: `${window.location.origin}/billing/success`,
         cancelUrl: `${window.location.origin}/billing/cancel`,
@@ -227,11 +230,10 @@ export default function PricingPage() {
           {tiers.map((tier) => (
             <article
               key={tier.name}
-              className={`relative rounded-2xl border p-6 transition duration-200 hover:scale-[1.015] ${
-                tier.highlighted
+              className={`relative rounded-2xl border p-6 transition duration-200 hover:scale-[1.015] ${tier.highlighted
                   ? "border-blue-400/50 bg-gradient-to-b from-blue-500/20 to-indigo-500/10 shadow-[0_20px_60px_rgba(37,99,235,0.25)] hover:shadow-[0_24px_70px_rgba(37,99,235,0.35)]"
                   : "border-white/10 bg-[#111827]/85 hover:border-white/20 hover:bg-[#111827]"
-              }`}
+                }`}
             >
               {tier.highlighted ? (
                 <span className="absolute right-4 top-4 rounded-full border border-blue-300/40 bg-blue-500/20 px-2.5 py-1 text-xs font-semibold text-blue-200">
@@ -253,11 +255,10 @@ export default function PricingPage() {
                 type="button"
                 onClick={() => void handlePlanCheckout(tier.name)}
                 disabled={checkoutBusy !== null}
-                className={`mt-8 h-11 w-full rounded-xl text-sm font-semibold transition duration-200 ${
-                  tier.highlighted
+                className={`mt-8 h-11 w-full rounded-xl text-sm font-semibold transition duration-200 ${tier.highlighted
                     ? "bg-gradient-to-r from-[#2563EB] to-[#4F46E5] text-white shadow-[0_10px_30px_rgba(37,99,235,0.35)] hover:brightness-110"
                     : "border border-white/20 bg-white/5 text-slate-100 hover:bg-white/10"
-                } disabled:opacity-70`}
+                  } disabled:opacity-70`}
               >
                 {checkoutBusy && tier.name === "Growth" ? "Opening checkout…" : tier.cta}
               </button>

@@ -17,11 +17,16 @@ export class StripeProvider implements PaymentProvider {
   }
 
   async createCheckout(input: CheckoutSessionInput): Promise<CheckoutSessionOutput> {
+    const priceId = this.getPriceId(input.planId);
+    if (!priceId || priceId === "price_...") {
+      throw new Error(`Stripe Price ID for plan '${input.planId}' is not configured in backend/.env (e.g. STRIPE_PRICE_${input.planId.toUpperCase()})`);
+    }
+
     const session = await this.stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
         {
-          price: this.getPriceId(input.planId),
+          price: priceId,
           quantity: 1,
         },
       ],
