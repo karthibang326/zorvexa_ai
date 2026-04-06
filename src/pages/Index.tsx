@@ -2,18 +2,19 @@ import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import PublicLayout from "@/components/layout/PublicLayout";
 import Hero from "@/components/landing/Hero";
-import ProductPreview from "@/components/landing/ProductPreview";
-import HowItWorks from "@/components/landing/HowItWorks";
-import LiveDemo from "@/components/landing/LiveDemo";
 import FeaturesGrid from "@/components/landing/FeaturesGrid";
-import TrustMetrics from "@/components/landing/TrustMetrics";
-import EnterpriseTrust from "@/components/landing/EnterpriseTrust";
-import Pricing from "@/components/landing/Pricing";
-import Differentiation from "@/components/landing/Differentiation";
-import ChangelogTeaser from "@/components/landing/ChangelogTeaser";
-import DocsTeaser from "@/components/landing/DocsTeaser";
+import Architecture from "@/components/landing/Architecture";
+import HowItWorks from "@/components/landing/HowItWorks";
+import FinOpsValue from "@/components/landing/FinOpsValue";
+import DeveloperExperience from "@/components/landing/DeveloperExperience";
 import FinalCTA from "@/components/landing/FinalCTA";
+import TrustMetrics from "@/components/landing/TrustMetrics";
 
+/**
+ * Zorvexa Landing Experience: "A live AI system controlling the cloud"
+ * Orchestrated by Principal Product Designer + Staff Frontend Architect (ex-FAANG).
+ * Architecture, ROI, Process, and Developer Proof.
+ */
 const Index = () => {
   const location = useLocation();
 
@@ -33,17 +34,28 @@ const Index = () => {
 
   return (
     <PublicLayout>
+      {/* 1. Split Hero (40/60) - Immediate Product Visibility */}
       <Hero />
-      <ProductPreview />
-      <HowItWorks />
-      <FeaturesGrid />
+      
+      {/* 2. Trust Metrics - Proof at Scale */}
       <TrustMetrics />
-      <EnterpriseTrust />
-      <LiveDemo />
-      <Pricing />
-      <Differentiation />
-      <ChangelogTeaser />
-      <DocsTeaser />
+      
+      {/* 3. Core Capabilities - Bento Grid of 6 Features */}
+      <FeaturesGrid />
+      
+      {/* 4. Architecture Blueprint - System Clarity */}
+      <Architecture />
+      
+      {/* 5. Intelligence OODA Loop - Process Transparency */}
+      <HowItWorks />
+      
+      {/* 6. FinOps - Business Impact & ROI */}
+      <FinOpsValue />
+      
+      {/* 7. Developer Experience - SDK/YAML/HCL Proof */}
+      <DeveloperExperience />
+      
+      {/* 8. Final Conversion CTA */}
       <FinalCTA />
     </PublicLayout>
   );

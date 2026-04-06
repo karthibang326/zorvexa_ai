@@ -1,58 +1,102 @@
 import { motion } from "framer-motion";
-import { Brain, CloudCog, Zap } from "lucide-react";
+import { Eye, Compass, Brain, Zap } from "lucide-react";
 
-const steps = [
+const STEPS = [
   {
-    icon: CloudCog,
-    title: "Connect your cloud",
-    sub: "AWS / GCP / Azure",
-    detail: "Secure read-first integrations. No rip-and-replace.",
+    id: "observe",
+    label: "Observe",
+    description: "Ingest trillions of data points across your multi-cloud environment in real-time.",
+    icon: Eye,
+    color: "text-blue-400",
   },
   {
+    id: "orient",
+    label: "Orient",
+    description: "Contextualize anomalies against historical cloud patterns and your custom governance policies.",
+    icon: Compass,
+    color: "text-amber-400",
+  },
+  {
+    id: "decide",
+    label: "Decide",
+    description: "AI generates a risk-mitigated remediation plan and identifies the most cost-efficient path.",
     icon: Brain,
-    title: "AI observes & learns",
-    sub: "Metrics, logs, patterns",
-    detail: "Baselines behavior, cost drivers, and failure modes across fleets.",
+    color: "text-indigo-400",
   },
   {
+    id: "act",
+    label: "Act",
+    description: "Autonomous execution of the plan via the Zorvexa DAG engine with zero human intervention.",
     icon: Zap,
-    title: "AI acts autonomously",
-    sub: "Scaling, healing, optimization",
-    detail: "Closed-loop execution with guardrails, approvals, and audit trails.",
+    color: "text-emerald-400",
   },
 ];
 
 export default function HowItWorks() {
   return (
-    <section id="how-it-works" className="relative py-20 sm:py-28">
-      <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px max-w-5xl -translate-y-1/2 bg-gradient-to-r from-transparent via-indigo-500/20 to-transparent" aria-hidden />
-      <div className="relative mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-2xl text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-300/90">How it works</p>
-          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">From connection to autonomous execution</h2>
-          <p className="mt-4 text-sm leading-relaxed text-slate-400 sm:text-base">
-            Three steps. One control plane. Outcomes you can measure.
+    <section id="how-it-works" className="py-24 sm:py-32 bg-slate-950 relative overflow-hidden px-6 lg:px-8">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(99,102,241,0.02),_transparent)]" />
+      
+      <div className="mx-auto max-w-7xl">
+        <div className="text-center mb-24 max-w-2xl mx-auto">
+          <h2 className="text-xs font-black uppercase tracking-[0.3em] text-indigo-500 mb-4">Autonomous Intelligence</h2>
+          <p className="text-3xl sm:text-5xl font-black tracking-tight text-white italic">
+            The OODA Loop.
+          </p>
+          <p className="mt-6 text-slate-400 text-lg leading-relaxed">
+            Zorvexa isn't just a tool; it's a closed-loop intelligence system that lives in your cloud 24/7.
           </p>
         </div>
-        <div className="mt-14 grid gap-6 sm:grid-cols-3">
-          {steps.map((step, idx) => (
-            <motion.article
-              key={step.title}
-              initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.45, delay: idx * 0.08 }}
-              className="group relative rounded-2xl border border-white/[0.08] bg-gradient-to-b from-white/[0.06] to-transparent p-6 backdrop-blur-sm transition-all hover:border-indigo-500/25 hover:shadow-[0_20px_60px_rgba(79,70,229,0.12)]"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/30 to-blue-600/20 text-indigo-100 ring-1 ring-white/10">
-                <step.icon className="h-6 w-6" strokeWidth={1.5} />
+
+        <div className="relative mt-20">
+          {/* Connecting Line (Desktop) */}
+          <div className="absolute top-1/2 left-0 w-full h-[1px] bg-white/5 -translate-y-1/2 hidden lg:block" />
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 relative">
+            {STEPS.map((step, idx) => (
+              <motion.div
+                key={step.id}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: idx * 0.15 }}
+                className="relative group text-center lg:text-left z-10"
+              >
+                {/* Step Circle */}
+                <div className="mx-auto lg:mx-0 w-16 h-16 rounded-full bg-slate-900 border border-white/10 flex items-center justify-center mb-8 relative transition-all group-hover:border-indigo-500 group-hover:shadow-[0_0_20px_rgba(99,102,241,0.2)]">
+                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-indigo-600 text-[10px] font-black text-white px-2 py-0.5 rounded-full shadow-lg">
+                    STEP 0{idx + 1}
+                  </span>
+                  <step.icon className={`h-6 w-6 ${step.color}`} strokeWidth={1.5} />
+                </div>
+
+                <h3 className="text-xl font-bold text-white mb-3 group-hover:text-indigo-400 transition-colors">
+                  {step.label}
+                </h3>
+                <p className="text-slate-400 text-sm leading-relaxed">
+                  {step.description}
+                </p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* AI Action Visualization Highlight */}
+        <div className="mt-32 p-8 rounded-[2rem] border border-white/10 bg-indigo-500/5 relative group overflow-hidden">
+           <div className="flex flex-col lg:flex-row items-center justify-between gap-8">
+              <div className="max-w-xl">
+                 <h4 className="text-lg font-bold text-white mb-2">Automated Incident Response</h4>
+                 <p className="text-sm text-slate-400 leading-relaxed italic">
+                    "Zorvexa detected a 300% latency spike in the checkout service. It autonomously re-routed traffic, scaled the underlying worker nodes across two AZs, and successfully resolved the issue before a single alert was triggered manually."
+                 </p>
               </div>
-              <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Step {idx + 1}</p>
-              <h3 className="mt-1 text-xl font-semibold text-white">{step.title}</h3>
-              <p className="mt-2 text-xs font-medium text-indigo-300/90">{step.sub}</p>
-              <p className="mt-3 text-sm leading-relaxed text-slate-400">{step.detail}</p>
-            </motion.article>
-          ))}
+              <div className="px-6 py-2 rounded-xl bg-white/5 border border-white/10 flex items-center space-x-3 backdrop-blur-md">
+                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                 <span className="text-xs font-mono font-bold text-slate-300">SYSTEM HEALTH: 100% (RECOVERED)</span>
+              </div>
+           </div>
+           {/* Background Mesh */}
+           <div className="absolute inset-0 opacity-[0.1] -z-10 bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
         </div>
       </div>
     </section>

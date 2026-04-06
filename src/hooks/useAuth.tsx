@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
-import { setApiAuthToken } from "@/lib/api";
+import { api, setApiAuthToken } from "@/lib/api";
 import { resolveMfaGate, type MfaGateState } from "@/lib/mfaGate";
 
 type AppRole = "admin" | "moderator" | "user";
@@ -33,8 +33,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data?.organizations) {
         // Flatten roles across all organizations for the global hasRole check
         // or prioritize the current organization's role.
-        const allRoles = data.organizations.map((o: any) => o.role.toLowerCase() as AppRole);
-        setRoles([...new Set(allRoles)]);
+        const allRoles: AppRole[] = data.organizations.map((o: any) => o.role.toLowerCase() as AppRole);
+        setRoles(Array.from(new Set(allRoles)));
       }
     } catch (err) {
       console.error("Error fetching roles from backend:", err);
@@ -146,7 +146,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     >
       {children}
     </AuthContext.Provider>
-  );
   );
 }
 

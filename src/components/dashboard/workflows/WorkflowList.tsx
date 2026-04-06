@@ -17,7 +17,7 @@ import { withContextQuery } from "@/lib/context";
 import { toast } from "sonner";
 
 function getApiBase() {
-  const root = (import.meta.env.VITE_WORKFLOWS_API_URL as string | undefined)?.replace(/\/$/, "") || "http://localhost:8080";
+  const root = (import.meta.env.VITE_WORKFLOWS_API_URL as string | undefined)?.replace(/\/$/, "") || "";
   return `${root}/api`;
 }
 

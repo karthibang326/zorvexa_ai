@@ -1,6 +1,6 @@
-import { PaymentProvider } from "./payment-provider.interface";
-import { StripeProvider } from "./stripe.provider";
-import { RazorpayProvider } from "./razorpay.provider";
+import { PaymentProvider } from "./providers/payment-provider.interface";
+import { StripeProvider } from "./providers/stripe.provider";
+import { RazorpayProvider } from "./providers/razorpay.provider";
 
 export class PaymentProviderFactory {
   private static providers: Map<string, PaymentProvider> = new Map();

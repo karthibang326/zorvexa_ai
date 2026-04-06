@@ -79,7 +79,10 @@ function readAutonomyModeFromStorage(): AutonomyMode {
   return "assisted";
 }
 
+const ControlTowerDashboard = lazy(() => import("@/components/dashboard/control-tower/ControlTowerDashboard").then(m => ({ default: m.ControlTowerDashboard })));
+
 const CONTROL_PLANE_TABS: Array<{ id: string; label: string }> = [
+  { id: "overview", label: "Control Tower" },
   { id: "tenant-console", label: "Tenant" },
   { id: "hybrid-control", label: "AI Control Plane" },
   { id: "ai-learning", label: "Learning" },
@@ -553,7 +556,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialTab = "overview" }) => {
     switch (activeTab) {
       // AI Control
       case "overview":
-        return <OverviewView />;
+        return <ControlTowerDashboard />;
       case "chat":
         return (
           <AIWorkspaceView

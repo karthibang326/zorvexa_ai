@@ -12,6 +12,12 @@ import {
   Server,
   Shield,
   CreditCard,
+  LayoutDashboard,
+  Zap,
+  Play,
+  Rocket,
+  Search,
+  HeartPulse,
 } from "lucide-react";
 
 export interface NavItem {
@@ -31,8 +37,14 @@ export interface NavGroup {
 /** Zorvexa — canonical shell navigation (desktop-first). */
 export const NAVIGATION_CONFIG: NavGroup[] = [
   {
-    group: "Platform",
+    group: "Intelligence",
     items: [
+      {
+        id: "overview",
+        label: "Control Tower",
+        icon: LayoutDashboard,
+        description: "Real-time AI Mission Control — health & OODA loop",
+      },
       {
         id: "hybrid-control",
         label: "AI Control Plane",
@@ -45,36 +57,52 @@ export const NAVIGATION_CONFIG: NavGroup[] = [
         icon: Brain,
         description: "AI memory — historical decisions, confidence, outcomes",
       },
+    ],
+  },
+  {
+    group: "Automation",
+    items: [
       {
-        id: "astra-ops-pipeline",
-        label: "Autonomous Loop",
-        icon: Activity,
-        description: "Ingest → decide → approve → execute pipeline",
+        id: "workflows",
+        label: "Workflows",
+        icon: Zap,
+        description: "DAG Execution Studio — design & deploy",
       },
       {
-        id: "ai-simulation",
-        label: "Simulation",
-        icon: FlaskConical,
-        description: "Preview AI changes before production impact",
+        id: "runs",
+        label: "Runs",
+        icon: Play,
+        description: "Live execution stream and historical logs",
       },
       {
-        id: "workload-location",
-        label: "Workloads",
-        icon: MapPin,
-        description: "Placement, topology, and runtime targets",
+        id: "deployments",
+        label: "Deployments",
+        icon: Rocket,
+        description: "Rollouts, rollbacks, and environment state",
       },
-      { id: "incidents", label: "Incidents", icon: Siren, description: "Detected and resolved events" },
+    ],
+  },
+  {
+    group: "Operations",
+    items: [
+      {
+        id: "incidents",
+        label: "Incidents",
+        icon: Siren,
+        description: "Detected and resolved events",
+        badge: "0",
+      },
       {
         id: "optimization",
-        label: "Optimization",
+        label: "FinOps",
         icon: Sparkles,
-        description: "Latency, cost, and capacity outcomes",
+        description: "Cost monitoring and AI rightsizing",
       },
       {
         id: "infrastructure",
         label: "Infrastructure",
         icon: Server,
-        description: "Clusters, nodes, and dependency health",
+        description: "Clusters, nodes, and cloud targets",
       },
       {
         id: "governance",

@@ -30,7 +30,7 @@ export function streamRun(
   onEvent: (evt: Record<string, unknown>) => void
 ): () => void {
   const base =
-    import.meta.env.VITE_WORKFLOWS_API_URL?.replace(/\/$/, "") ?? "http://localhost:8080";
+    import.meta.env.VITE_WORKFLOWS_API_URL?.replace(/\/$/, "") ?? "";
   const es = new EventSource(`${base}/api/runs/${encodeURIComponent(runId)}/stream`);
   es.addEventListener("update", (e) => {
     try {
