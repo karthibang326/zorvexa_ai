@@ -1,5 +1,11 @@
+// ⚠️  Tracing MUST be the very first import so OTel patches load before Fastify/pg.
+import { initTracing } from "./lib/tracing";
+initTracing();
+
 import Fastify from "fastify";
 import rateLimit from "@fastify/rate-limit";
+import fastifySwagger from "@fastify/swagger";
+import fastifySwaggerUi from "@fastify/swagger-ui";
 import { env } from "./config/env";
 import { workflowRoutes } from "./modules/workflow/workflow.routes";
 import { runRoutes } from "./modules/run/run.routes";
@@ -58,6 +64,7 @@ import { logError, logInfo } from "./lib/logger";
 import { assertProductionReadiness } from "./lib/production-readiness";
 import { BRAND } from "./shared/branding";
 import { contextMiddleware } from "./middleware/context";
+import { secretsManager } from "./lib/secrets-manager";
 import { WSServer } from "./websocket";
 import { startAiStreamPipeline, stopAiStreamPipeline } from "./modules/ai-stream/ai-stream.service";
 
@@ -68,14 +75,66 @@ export function buildServer() {
   });
   const allowedOrigins = env.CORS_ORIGINS.split(",").map((v) => v.trim()).filter(Boolean);
 
+  // ── OpenAPI / Swagger ────────────────────────────────────────────────────
+  app.register(fastifySwagger, {
+    openapi: {
+      info: {
+        title: `${BRAND.name} API`,
+        description: "Internal REST API for the Zorvexa / AstraOps platform",
+        version: "1.0.0",
+      },
+      components: {
+        securitySchemes: {
+          bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+        },
+      },
+      security: [{ bearerAuth: [] }],
+      tags: [
+        { name: "workflows", description: "Workflow management" },
+        { name: "runs", description: "Workflow run execution" },
+        { name: "ai", description: "AI copilot & analysis" },
+        { name: "billing", description: "Billing & subscriptions" },
+        { name: "cloud", description: "Multi-cloud operations" },
+        { name: "self-healing", description: "Autonomous remediation" },
+        { name: "audit", description: "Audit log" },
+        { name: "system", description: "Health, readiness, metrics" },
+      ],
+    },
+  });
+  app.register(fastifySwaggerUi, {
+    routePrefix: "/docs",
+    uiConfig: { docExpansion: "list", deepLinking: true },
+    staticCSP: true,
+  });
+
+  // ── Tiered rate limiting by billing plan ────────────────────────────────
+  // Limits scale with plan: free → pro → enterprise.
+  // Falls back to env.RATE_LIMIT_MAX when plan is unknown / unauthenticated.
+  const PLAN_LIMITS: Record<string, number> = {
+    FREE: env.RATE_LIMIT_MAX,           // default from env (100 req/min)
+    STARTER: env.RATE_LIMIT_MAX,
+    GROWTH: env.RATE_LIMIT_MAX * 5,     // 500 req/min
+    ENTERPRISE: env.RATE_LIMIT_MAX * 20, // 2000 req/min
+  };
+
   app.register(rateLimit, {
-    max: env.RATE_LIMIT_MAX,
+    max: (request) => {
+      const authUser = (request as any).authUser as { plan?: string } | undefined;
+      const plan = (authUser?.plan ?? "FREE").toUpperCase();
+      return PLAN_LIMITS[plan] ?? env.RATE_LIMIT_MAX;
+    },
     timeWindow: env.RATE_LIMIT_WINDOW,
     // Per-user rate limiting: use authenticated user ID when available, fall back to IP.
     keyGenerator: (request) => {
       const authUser = (request as any).authUser as { id?: string } | undefined;
       return authUser?.id ?? request.ip;
     },
+    errorResponseBuilder: (_request, context) => ({
+      statusCode: 429,
+      error: "Too Many Requests",
+      message: `Rate limit exceeded. Retry after ${Math.ceil(context.ttl / 1000)}s. Upgrade your plan for higher limits.`,
+      retryAfter: Math.ceil(context.ttl / 1000),
+    }),
   });
   app.addHook("onRequest", async (request, reply) => {
     const origin = request.headers.origin;
@@ -185,8 +244,9 @@ async function bootstrap() {
   startWorkflowWorker();
   startAstraAiWorker();
   startAstraExecutorWorker();
+  secretsManager.startRotationPoller(60_000);
   aiOrchestratorService.start(6000);
-  billingService.startDailyBillingAutomation();
+  void billingService.runDailyBillingAutomation();
   if (env.AI_OPS_LOOP_START_ON_BOOT === "true") {
     aiOpsLearningService
       .startContinuousLoop({
@@ -215,10 +275,11 @@ async function bootstrap() {
     await app.close();
     await closeQueueResources();
     aiOrchestratorService.stop();
-    billingService.stopDailyBillingAutomation();
+    // billingService has no persistent loop to stop (runs once daily via runDailyBillingAutomation)
     aiOpsLearningService.stopContinuousLoop();
     k8sAiLoopService.stop();
     stopControlLoop();
+    secretsManager.stopRotationPoller();
     await prisma.$disconnect();
     logInfo("graceful_shutdown_done");
     process.exit(0);

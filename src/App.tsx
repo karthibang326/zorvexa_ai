@@ -24,6 +24,7 @@ import MailtoRedirect from "./pages/MailtoRedirect";
 import FeaturesPage from "./pages/FeaturesPage";
 import { BillingDashboard } from "./pages/billing/BillingDashboard";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
+import RouteErrorBoundary from "@/components/RouteErrorBoundary";
 import ScrollToTop from "@/components/layout/ScrollToTop";
 
 const queryClient = new QueryClient();
@@ -83,7 +84,9 @@ const App = () => (
                 path="/billing"
                 element={
                   <ProtectedRoute>
-                    <BillingDashboard />
+                    <RouteErrorBoundary routeName="Billing">
+                      <BillingDashboard />
+                    </RouteErrorBoundary>
                   </ProtectedRoute>
                 }
               />
@@ -91,7 +94,9 @@ const App = () => (
                 path="/launch-setup"
                 element={
                   <ProtectedRoute>
-                    <LaunchSetup />
+                    <RouteErrorBoundary routeName="LaunchSetup">
+                      <LaunchSetup />
+                    </RouteErrorBoundary>
                   </ProtectedRoute>
                 }
               />
@@ -99,9 +104,11 @@ const App = () => (
                 path="/dashboard"
                 element={
                   <ProtectedRoute>
-                    <Suspense fallback={<RouteLoader />}>
-                      <Dashboard />
-                    </Suspense>
+                    <RouteErrorBoundary routeName="Dashboard">
+                      <Suspense fallback={<RouteLoader />}>
+                        <Dashboard />
+                      </Suspense>
+                    </RouteErrorBoundary>
                   </ProtectedRoute>
                 }
               />
@@ -109,9 +116,11 @@ const App = () => (
                 path="/settings/integrations"
                 element={
                   <ProtectedRoute>
-                    <Suspense fallback={<RouteLoader />}>
-                      <Dashboard initialTab="integrations" />
-                    </Suspense>
+                    <RouteErrorBoundary routeName="Integrations">
+                      <Suspense fallback={<RouteLoader />}>
+                        <Dashboard initialTab="integrations" />
+                      </Suspense>
+                    </RouteErrorBoundary>
                   </ProtectedRoute>
                 }
               />

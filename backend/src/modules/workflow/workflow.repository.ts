@@ -6,6 +6,8 @@ export const workflowRepository = {
     prisma.workflow.findMany({
       orderBy: { updatedAt: "desc" },
       take: 200,
+      // Batch-include latest version to avoid callers issuing per-row queries (N+1 guard).
+      include: { versions: { orderBy: { version: "desc" }, take: 1 } },
     }),
 
   create: (data: { name: string; createdBy: string; nodes: Prisma.InputJsonValue; edges: Prisma.InputJsonValue }) =>

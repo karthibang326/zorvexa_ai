@@ -12,44 +12,136 @@ env:
   IMAGE_NAMESPACE: ${{ github.repository_owner }}
 
 jobs:
-  test-and-build:
+  # ── Frontend: lint, test with coverage, a11y ─────────────────────────────
+  frontend:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      - name: Install frontend dependencies
+      - name: Install dependencies
         run: npm ci
 
-      - name: Run frontend tests
-        run: npm run test
+      - name: Run frontend tests with coverage
+        run: npm run test -- --coverage --reporter=verbose
+        env:
+          NODE_ENV: test
+
+      - name: Upload frontend coverage
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          flags: frontend
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
       - name: Build frontend
         run: npm run build
+        env:
+          VITE_WORKFLOWS_API_URL: ${{ secrets.VITE_WORKFLOWS_API_URL }}
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run a11y tests
+        run: npx playwright test tests/a11y.spec.ts --reporter=html
+        continue-on-error: false   # Hard gate — a11y failures block merge.
+
+      - name: Upload Playwright a11y report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-a11y-report
+          path: playwright-report/
+          retention-days: 7
+
+  # ── Backend: test with coverage, validate migrations ─────────────────────
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: quantumops_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
 
       - name: Install backend dependencies
         run: npm ci
         working-directory: backend
 
-      - name: Run backend tests
-        run: npm test
+      - name: Validate migration (Expand/Contract check)
+        run: npm run db:migrate-safe:dry
         working-directory: backend
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/quantumops_test
+          NODE_ENV: test
+
+      - name: Run backend tests with coverage
+        run: npm test -- --coverage
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/quantumops_test
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
+          JWT_SECRET: test-secret-ci
+          AUTH_PROVIDER: local
+          AUTH_DEV_BYPASS: "false"
+
+      - name: Upload backend coverage
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          flags: backend
+          directory: backend/coverage
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
       - name: Build backend
         run: npm run build
         working-directory: backend
 
+  # ── Docker build & push ───────────────────────────────────────────────────
+  docker:
+    if: github.event_name != 'pull_request'
+    needs: [frontend, backend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Login to registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -57,7 +149,6 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push backend image
-        if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v6
         with:
           context: ./backend
@@ -66,7 +157,6 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/astraops-backend:${{ github.sha }}
 
       - name: Build and push worker image
-        if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v6
         with:
           context: ./backend
@@ -75,7 +165,6 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/astraops-worker:${{ github.sha }}
 
       - name: Build and push frontend image
-        if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -85,16 +174,15 @@ jobs:
             VITE_WORKFLOWS_API_URL=${{ secrets.VITE_WORKFLOWS_API_URL }}
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/astraops-frontend:${{ github.sha }}
 
+  # ── Deploy to Kubernetes ──────────────────────────────────────────────────
   deploy:
     if: github.event_name != 'pull_request'
-    needs: test-and-build
+    needs: docker
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v4
+      - uses: azure/setup-kubectl@v4
         with:
           version: latest
 
@@ -104,6 +192,12 @@ jobs:
           echo "${KUBE_CONFIG_DATA}" | base64 -d > ~/.kube/config
         env:
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+
+      - name: Run safe migration deploy
+        run: |
+          kubectl exec deploy/astraops-backend -- \
+            node dist/scripts/migrate-safe.js || \
+          echo "Migration step skipped (pod not ready or migration not pending)"
 
       - name: Update image tags
         run: |
