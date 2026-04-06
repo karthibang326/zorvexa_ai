@@ -9,4 +9,8 @@ export function logWarn(message: string, data?: Record<string, unknown>) {
 export function logError(message: string, data?: Record<string, unknown>) {
   console.error(JSON.stringify({ level: "error", message, ...data, ts: new Date().toISOString() }));
 }
-
+export const logger = {
+  info: logInfo,
+  warn: logWarn,
+  error: logError,
+};

@@ -23,8 +23,16 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const server = http.createServer(app);
 
+// Legacy express routes removed
+
+// Special handling for Stripe Webhook raw body (MUST be before express.json())
+app.use("/api/billing/webhook", express.raw({ type: "application/json" }));
+
 app.use(cors());
 app.use(express.json());
+
+// Main Billing Routes
+// app.use("/api/billing", billingRoutes); // Legacy Express usage removed
 
 // WebSocket initialization
 WSServer.initialize(server);

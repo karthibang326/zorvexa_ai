@@ -22,6 +22,7 @@ import LaunchSetup from "./pages/LaunchSetup";
 import LiveDemoPage from "./pages/LiveDemoPage";
 import MailtoRedirect from "./pages/MailtoRedirect";
 import FeaturesPage from "./pages/FeaturesPage";
+import { BillingDashboard } from "./pages/billing/BillingDashboard";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
 import ScrollToTop from "@/components/layout/ScrollToTop";
 
@@ -78,6 +79,14 @@ const App = () => (
               <Route path="/status" element={<Navigate to="/changelog" replace />} />
               <Route path="/billing/success" element={<Success />} />
               <Route path="/billing/cancel" element={<Cancel />} />
+              <Route
+                path="/billing"
+                element={
+                  <ProtectedRoute>
+                    <BillingDashboard />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/launch-setup"
                 element={

@@ -7,37 +7,141 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum PlanType {
+  FREE
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+enum BillingStatus {
+  PENDING
+  OPEN
+  PAID
+  FAILED
+  VOID
+}
+
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  role      String
-  createdAt DateTime @default(now())
+  id               String       @id @default(uuid())
+  email            String       @unique
+  role             String
+  stripeCustomerId String?      @unique
+  createdAt        DateTime     @default(now())
+  memberships      Membership[]
 }
 
 model Organization {
-  id              String   @id @default(uuid())
-  name            String
-  slug            String?
-  ownerId         String
-  billingPlan     String   @default("enterprise")
-  monthlySpendUsd Float    @default(0)
-  aiSavingsUsd    Float    @default(0)
-  createdAt       DateTime @default(now())
+  id                 String          @id @default(uuid())
+  name               String
+  slug               String?
+  ownerId            String
+  stripeCustomerId   String?         @unique
+  billingPlan        PlanType        @default(FREE)
+  billingPercentage  Float           @default(0.15) // Default 15% for Starter
+  subscriptionStatus String?         // active, past_due, canceled, etc.
+  monthlySpendUsd    Decimal         @default(0) @db.Decimal(12, 2)
+  aiSavingsUsd       Decimal         @default(0) @db.Decimal(12, 2)
+  createdAt          DateTime        @default(now())
+  
+  memberships        Membership[]
+  subscriptions      Subscription[]
+  usageEvents        UsageEvent[]
+  billingRecords     BillingRecord[]
+  invoices           Invoice[]
+  auditLogs          AuditLog[]
 }
 
-/// Append-only audit trail — always scoped by orgId (tenant isolation).
+model Subscription {
+  id                   String       @id @default(uuid())
+  orgId                String
+  stripeSubscriptionId String       @unique
+  planId               PlanType
+  status               String
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean      @default(false)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  organization         Organization @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+}
+
+model UsageEvent {
+  id            String       @id @default(uuid())
+  orgId         String
+  resourceId    String?      // The resource being optimized
+  type          String       @default("AI_SAVINGS")
+  amount        Decimal      @db.Decimal(12, 2) // The savings amount generated
+  metadata      Json?        // Details about the action
+  timestamp     DateTime     @default(now())
+  createdAt     DateTime     @default(now())
+
+  organization  Organization @relation(fields: [orgId], references: [id])
+
+  @@index([orgId, timestamp])
+  @@index([resourceId])
+}
+
+model BillingRecord {
+  id                 String       @id @default(uuid())
+  orgId              String
+  totalSavings       Decimal      @db.Decimal(12, 2)
+  usageCharge        Decimal      @default(0) @db.Decimal(12, 2)
+  baseCharge         Decimal      @default(0) @db.Decimal(12, 2)
+  finalCharge        Decimal      @default(0) @db.Decimal(12, 2)
+  billingPeriodStart DateTime
+  billingPeriodEnd   DateTime
+  status             BillingStatus @default(PENDING)
+  createdAt          DateTime     @default(now())
+
+  organization       Organization @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+}
+
+model Invoice {
+  id              String       @id @default(uuid())
+  orgId           String
+  stripeInvoiceId String?      @unique
+  amount          Decimal      @db.Decimal(12, 2)
+  status          BillingStatus
+  createdAt       DateTime     @default(now())
+
+  organization    Organization @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+  @@index([stripeInvoiceId])
+}
+
+model ProcessedWebhook {
+  id         String   @id // stripe event id
+  type       String
+  processedAt DateTime @default(now())
+}
+
+model BillingLock {
+  id        String   @id
+  orgId     String   @unique
+  lockedAt  DateTime @default(now())
+  expiresAt DateTime
+}
+
 model AuditLog {
   id           String   @id @default(uuid())
   orgId        String
-  userId       String
+  userId       String?
   action       String
   resourceType String
   resourceId   String?
   metadata     Json?
   createdAt    DateTime @default(now())
 
+  organization Organization @relation(fields: [orgId], references: [id])
+
   @@index([orgId, createdAt])
-  @@index([userId, createdAt])
 }
 
 model Project {
@@ -73,10 +177,16 @@ model EnvironmentPolicy {
 }
 
 model Membership {
-  id             String @id @default(uuid())
+  id             String       @id @default(uuid())
   userId         String
   organizationId String
   role           String
+
+  user           User         @relation(fields: [userId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([userId])
+  @@index([organizationId])
 }
 
 model Plugin {

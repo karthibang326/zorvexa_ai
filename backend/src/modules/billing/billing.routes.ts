@@ -2,13 +2,14 @@ import { FastifyInstance } from "fastify";
 import { authenticate } from "../../lib/auth";
 import { CreateCheckoutSchema } from "./billing.schemas";
 import { billingService } from "./billing.service";
+import { prisma } from "../../lib/prisma";
 
 export async function billingRoutes(app: FastifyInstance) {
   app.post("/create-checkout", { preHandler: authenticate }, async (request, reply) => {
     const parsed = CreateCheckoutSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
     try {
-      const session = await billingService.createCheckoutSession(parsed.data);
+      const session = await billingService.createCheckoutSession(parsed.data as any);
       return reply.code(201).send(session);
     } catch (e) {
       return reply.code(500).send({ error: e instanceof Error ? e.message : "Failed to create checkout session" });
@@ -20,7 +21,7 @@ export async function billingRoutes(app: FastifyInstance) {
       const signature = request.headers["stripe-signature"] as string | undefined;
       const rawBody = typeof request.body === "string" ? request.body : JSON.stringify(request.body ?? {});
       const event = billingService.verifyWebhookSignature(rawBody, signature);
-      const handled = billingService.handleWebhookEvent(event as any, (request.body as any)?.type);
+      const handled = await billingService.handleWebhookEvent(event as any);
       return reply.code(200).send({
         received: true,
         mode: event ? "verified" : "passthrough",
@@ -44,82 +45,45 @@ export async function billingRoutes(app: FastifyInstance) {
 
   app.post("/usage/record", { preHandler: authenticate }, async (request, reply) => {
     const tenantId = String((request.body as any)?.tenantId ?? (request as any)?.scopeContext?.orgId ?? "");
+    const userId = String((request as any)?.authUser?.id ?? "system");
     if (!tenantId) return reply.code(400).send({ error: "tenantId is required" });
-    const usage = billingService.recordUsage({
+    
+    const amount = Number((request.body as any)?.amount ?? (request.body as any)?.savingsUsd ?? 0);
+    const out = await billingService.recordSavings({
       tenantId,
-      aiDecisions: Number((request.body as any)?.aiDecisions ?? 0),
-      aiActions: Number((request.body as any)?.aiActions ?? 0),
-      telemetryEvents: Number((request.body as any)?.telemetryEvents ?? 0),
+      userId,
+      beforeCostUsd: amount, // Assuming direct savings reporting or calculated
+      afterCostUsd: 0,
+      explanation: (request.body as any)?.explanation || "Manual usage record",
     });
-    return { tenantId, usage };
+    return { tenantId, eventId: out.id };
   });
 
   app.get("/usage/summary", { preHandler: authenticate }, async (request, reply) => {
     const tenantId = String((request.query as any)?.tenantId ?? (request as any)?.scopeContext?.orgId ?? "");
     if (!tenantId) return reply.code(400).send({ error: "tenantId is required" });
-    return billingService.getUsageSummary(tenantId);
+    return await billingService.getBillingDashboard(tenantId);
   });
 
   app.post("/plan/set", { preHandler: authenticate }, async (request, reply) => {
+    // In production, plan is set via Stripe. This is for manual admin/dev use.
     const tenantId = String((request.body as any)?.tenantId ?? (request as any)?.scopeContext?.orgId ?? "");
-    const rawPlan = String((request.body as any)?.plan ?? "starter").toLowerCase();
-    const plan = rawPlan === "free" ? "starter" : rawPlan === "pro" ? "growth" : rawPlan;
+    const plan = String((request.body as any)?.plan ?? "starter").toLowerCase();
     if (!tenantId) return reply.code(400).send({ error: "tenantId is required" });
-    if (!["starter", "growth", "enterprise"].includes(plan)) {
-      return reply.code(400).send({ error: "plan must be starter|growth|enterprise" });
-    }
-    return billingService.setPlan({ tenantId, plan: plan as "starter" | "growth" | "enterprise" });
+    
+    await (prisma as any).organization.update({
+        where: { id: tenantId },
+        data: { billingPlan: plan }
+    });
+    return { tenantId, plan };
   });
 
   app.get("/plan", { preHandler: authenticate }, async (request, reply) => {
     const tenantId = String((request.query as any)?.tenantId ?? (request as any)?.scopeContext?.orgId ?? "");
     if (!tenantId) return reply.code(400).send({ error: "tenantId is required" });
-    return billingService.getPlan(tenantId);
-  });
-
-  app.post("/cluster/reserve", { preHandler: authenticate }, async (request, reply) => {
-    const tenantId = String((request.body as any)?.tenantId ?? (request as any)?.scopeContext?.orgId ?? "");
-    if (!tenantId) return reply.code(400).send({ error: "tenantId is required" });
-    const out = billingService.reserveCluster({ tenantId });
-    if (!out.ok) return reply.code(402).send({ error: "Plan limit reached", details: out });
-    return out;
-  });
-
-  app.post("/value-pricing/estimate", { preHandler: authenticate }, async (request, reply) => {
-    const cloudSpendUsd = Number((request.body as any)?.cloudSpendUsd ?? 0);
-    const savingsUsd = Number((request.body as any)?.savingsUsd ?? 0);
-    const rawPlan = String((request.body as any)?.plan ?? "starter").toLowerCase();
-    const plan = rawPlan === "free" ? "starter" : rawPlan === "pro" ? "growth" : rawPlan;
-    if (cloudSpendUsd < 0 || savingsUsd < 0) {
-      return reply.code(400).send({ error: "cloudSpendUsd and savingsUsd must be >= 0" });
-    }
-    if (!["starter", "growth", "enterprise"].includes(plan)) {
-      return reply.code(400).send({ error: "plan must be starter|growth|enterprise" });
-    }
-    return billingService.estimateValuePricing({
-      cloudSpendUsd,
-      savingsUsd,
-      plan: plan as "starter" | "growth" | "enterprise",
-    });
-  });
-
-  app.post("/invoice/generate", { preHandler: authenticate }, async (request, reply) => {
-    const tenantId = String((request.body as any)?.tenantId ?? (request as any)?.scopeContext?.orgId ?? "");
-    if (!tenantId) return reply.code(400).send({ error: "tenantId is required" });
-    const cloudSpendUsd = Number((request.body as any)?.cloudSpendUsd ?? 0);
-    const savingsUsd = Number((request.body as any)?.savingsUsd ?? 0);
-    const rawPlan = String((request.body as any)?.plan ?? "").toLowerCase();
-    const plan = rawPlan ? (rawPlan === "free" ? "starter" : rawPlan === "pro" ? "growth" : rawPlan) : undefined;
-    if (cloudSpendUsd < 0 || savingsUsd < 0) {
-      return reply.code(400).send({ error: "cloudSpendUsd and savingsUsd must be >= 0" });
-    }
-    const invoice = billingService.generateUsageInvoice({
-      tenantId,
-      cloudSpendUsd,
-      savingsUsd,
-      plan: plan as any,
-    });
-    return { tenantId, invoice };
+    const org = await (prisma as any).organization.findUnique({ where: { id: tenantId } });
+    const pricing = billingService.getPlanPricing(org?.billingPlan || "starter");
+    return { tenantId, plan: org?.billingPlan, ...pricing };
   });
 
   app.post("/savings/record", { preHandler: authenticate }, async (request, reply) => {
@@ -128,17 +92,12 @@ export async function billingRoutes(app: FastifyInstance) {
     if (!tenantId) return reply.code(400).send({ error: "tenantId is required" });
     const beforeCostUsd = Number((request.body as any)?.beforeCostUsd ?? 0);
     const afterCostUsd = Number((request.body as any)?.afterCostUsd ?? 0);
-    if (beforeCostUsd < 0 || afterCostUsd < 0) {
-      return reply.code(400).send({ error: "beforeCostUsd and afterCostUsd must be >= 0" });
-    }
-    const rawPlan = String((request.body as any)?.plan ?? "").toLowerCase();
-    const plan = rawPlan ? (rawPlan === "free" ? "starter" : rawPlan === "pro" ? "growth" : rawPlan) : undefined;
-    const entry = billingService.recordSavings({
+    
+    const entry = await billingService.recordSavings({
       tenantId,
       userId,
       beforeCostUsd,
       afterCostUsd,
-      plan: plan as any,
       explanation: (request.body as any)?.explanation,
       actions: Array.isArray((request.body as any)?.actions) ? (request.body as any).actions.map(String) : undefined,
     });
@@ -146,13 +105,26 @@ export async function billingRoutes(app: FastifyInstance) {
   });
 
   app.post("/automation/run-daily", { preHandler: authenticate }, async () => {
-    billingService.runDailyBillingCycle();
+    await billingService.runDailyBillingAutomation();
     return { ok: true };
   });
 
-  app.get("/dashboard", { preHandler: authenticate }, async (request, reply) => {
+  app.get("/ai/insights", { preHandler: authenticate }, async (request, reply) => {
     const tenantId = String((request.query as any)?.tenantId ?? (request as any)?.scopeContext?.orgId ?? "");
     if (!tenantId) return reply.code(400).send({ error: "tenantId is required" });
-    return billingService.getBillingDashboard(tenantId);
+    const { aiAdvisorService } = await import("./services/ai-advisor.service");
+    
+    return {
+      forecast: await aiAdvisorService.forecastUsage(tenantId),
+      anomalies: await aiAdvisorService.detectAnomaly(tenantId)
+    };
+  });
+
+  app.get("/ai/explain-invoice/:id", { preHandler: authenticate }, async (request, reply) => {
+    const id = (request.params as any).id;
+    const { aiAdvisorService } = await import("./services/ai-advisor.service");
+    return {
+      explanation: await aiAdvisorService.explainBillingRecord(id)
+    };
   });
 }
