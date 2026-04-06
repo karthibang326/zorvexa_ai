@@ -26,11 +26,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [mfaGate, setMfaGate] = useState<MfaGateState>({ kind: "ok" });
   const [roles, setRoles] = useState<AppRole[]>([]);
 
-  const fetchRoles = async (userId: string) => {
-    if (!isSupabaseConfigured) return;
-    const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-    if (data) {
-      setRoles(data.map((r: { role: AppRole }) => r.role));
+  const fetchRoles = async (_userId: string) => {
+    try {
+      // Roles are now fetched from the backend, which manages them in PostgreSQL
+      const { data } = await api.get("/org/hierarchy");
+      if (data?.organizations) {
+        // Flatten roles across all organizations for the global hasRole check
+        // or prioritize the current organization's role.
+        const allRoles = data.organizations.map((o: any) => o.role.toLowerCase() as AppRole);
+        setRoles([...new Set(allRoles)]);
+      }
+    } catch (err) {
+      console.error("Error fetching roles from backend:", err);
     }
   };
 
@@ -139,6 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     >
       {children}
     </AuthContext.Provider>
+  );
   );
 }
 

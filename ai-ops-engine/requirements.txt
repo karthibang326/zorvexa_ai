@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+openai
+pydantic
+sqlalchemy
+psycopg2-binary
+aioredis
+celery
+kafka-python
+aiokafka
+faiss-cpu
+numpy
+python-dotenv
+httpx
+websockets
+pytest
+pytest-asyncio
